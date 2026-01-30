@@ -1,0 +1,289 @@
+//
+//  ChucksModels.swift
+//  wasup-chucks
+//
+//  Created by Kieran Klukas on 1/30/26.
+//
+
+import Foundation
+
+// MARK: - API Models
+
+struct Allergen: Codable, Hashable {
+    let url: String
+    let alt: String
+}
+
+struct MenuItem: Codable, Hashable, Identifiable {
+    let name: String
+    let allergens: [Allergen]
+    
+    var id: String { name }
+}
+
+struct VenueMenu: Codable, Hashable, Identifiable {
+    let venue: String
+    let meal: String?
+    let slot: String
+    let items: [MenuItem]
+    
+    var id: String { "\(venue)-\(slot)" }
+}
+
+typealias MenuResponse = [String: [VenueMenu]]
+
+// MARK: - Meal Phase
+
+enum MealPhase: String, CaseIterable, Sendable {
+    case breakfast = "Breakfast"
+    case brunch = "Brunch"
+    case lunch = "Lunch"
+    case dinner = "Dinner"
+    case closed = "Closed"
+    
+    var icon: String {
+        switch self {
+        case .breakfast: return "cup.and.saucer.fill"
+        case .brunch: return "fork.knife"
+        case .lunch: return "sun.max.fill"
+        case .dinner: return "moon.stars.fill"
+        case .closed: return "moon.zzz.fill"
+        }
+    }
+    
+    var shortName: String {
+        switch self {
+        case .breakfast: return "Breakfast"
+        case .brunch: return "Brunch"
+        case .lunch: return "Lunch"
+        case .dinner: return "Dinner"
+        case .closed: return "Closed"
+        }
+    }
+    
+    var apiSlot: String {
+        switch self {
+        case .breakfast, .brunch: return "breakfast"
+        case .lunch: return "lunch"
+        case .dinner: return "dinner"
+        case .closed: return ""
+        }
+    }
+}
+
+// MARK: - Meal Schedule
+
+struct MealSchedule: Identifiable {
+    var id: String { phase.rawValue }
+    let phase: MealPhase
+    let startHour: Int
+    let startMinute: Int
+    let endHour: Int
+    let endMinute: Int
+    
+    var startMinutes: Int { startHour * 60 + startMinute }
+    var endMinutes: Int { endHour * 60 + endMinute }
+    
+    // Mon-Fri: Hot Breakfast 7-8:15, Continental 8:15-9:30, Lunch 10:30-2:30, Dinner 4:30-7:30
+    // Treating Hot + Continental as one "Breakfast" period for simplicity
+    static let weekdaySchedule: [MealSchedule] = [
+        MealSchedule(phase: .breakfast, startHour: 7, startMinute: 0, endHour: 9, endMinute: 30),
+        MealSchedule(phase: .lunch, startHour: 10, startMinute: 30, endHour: 14, endMinute: 30),
+        MealSchedule(phase: .dinner, startHour: 16, startMinute: 30, endHour: 19, endMinute: 30)
+    ]
+    
+    // Saturday: Continental 8-9, Brunch 11-1, Dinner 4:30-6:30
+    static let saturdaySchedule: [MealSchedule] = [
+        MealSchedule(phase: .breakfast, startHour: 8, startMinute: 0, endHour: 9, endMinute: 0),
+        MealSchedule(phase: .brunch, startHour: 11, startMinute: 0, endHour: 13, endMinute: 0),
+        MealSchedule(phase: .dinner, startHour: 16, startMinute: 30, endHour: 18, endMinute: 30)
+    ]
+    
+    // Sunday: Hot Breakfast 8-9, Lunch 11:30-2, Dinner 5-7:30
+    static let sundaySchedule: [MealSchedule] = [
+        MealSchedule(phase: .breakfast, startHour: 8, startMinute: 0, endHour: 9, endMinute: 0),
+        MealSchedule(phase: .lunch, startHour: 11, startMinute: 30, endHour: 14, endMinute: 0),
+        MealSchedule(phase: .dinner, startHour: 17, startMinute: 0, endHour: 19, endMinute: 30)
+    ]
+    
+    static func schedule(for weekday: Int) -> [MealSchedule] {
+        switch weekday {
+        case 1: return sundaySchedule
+        case 7: return saturdaySchedule
+        default: return weekdaySchedule
+        }
+    }
+}
+
+// MARK: - Chuck's Status
+
+struct ChucksStatus {
+    let currentPhase: MealPhase
+    let timeRemaining: TimeInterval?
+    let nextPhase: MealPhase?
+    let nextPhaseStart: Date?
+    let isOpen: Bool
+    let currentMealEnd: Date?
+    
+    static func calculate(for date: Date = Date()) -> ChucksStatus {
+        let calendar = Calendar.current
+        let weekday = calendar.component(.weekday, from: date)
+        let schedule = MealSchedule.schedule(for: weekday)
+        
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let currentMinutes = hour * 60 + minute
+        
+        for (index, meal) in schedule.enumerated() {
+            if currentMinutes >= meal.startMinutes && currentMinutes < meal.endMinutes {
+                let endDate = calendar.date(bySettingHour: meal.endHour, minute: meal.endMinute, second: 0, of: date)!
+                let remaining = endDate.timeIntervalSince(date)
+                
+                let nextPhase: MealPhase?
+                let nextStart: Date?
+                if index + 1 < schedule.count {
+                    let next = schedule[index + 1]
+                    nextPhase = next.phase
+                    nextStart = calendar.date(bySettingHour: next.startHour, minute: next.startMinute, second: 0, of: date)
+                } else {
+                    nextPhase = .closed
+                    nextStart = nil
+                }
+                
+                return ChucksStatus(
+                    currentPhase: meal.phase,
+                    timeRemaining: remaining,
+                    nextPhase: nextPhase,
+                    nextPhaseStart: nextStart,
+                    isOpen: true,
+                    currentMealEnd: endDate
+                )
+            }
+            
+            if currentMinutes < meal.startMinutes {
+                let startDate = calendar.date(bySettingHour: meal.startHour, minute: meal.startMinute, second: 0, of: date)!
+                let timeUntil = startDate.timeIntervalSince(date)
+                
+                return ChucksStatus(
+                    currentPhase: .closed,
+                    timeRemaining: timeUntil,
+                    nextPhase: meal.phase,
+                    nextPhaseStart: startDate,
+                    isOpen: false,
+                    currentMealEnd: nil
+                )
+            }
+        }
+        
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: date)!
+        let tomorrowWeekday = calendar.component(.weekday, from: tomorrow)
+        let tomorrowSchedule = MealSchedule.schedule(for: tomorrowWeekday)
+        
+        if let firstMeal = tomorrowSchedule.first {
+            var nextStart = calendar.date(bySettingHour: firstMeal.startHour, minute: firstMeal.startMinute, second: 0, of: tomorrow)!
+            if nextStart <= date {
+                nextStart = calendar.date(byAdding: .day, value: 1, to: nextStart)!
+            }
+            let timeUntil = nextStart.timeIntervalSince(date)
+            
+            return ChucksStatus(
+                currentPhase: .closed,
+                timeRemaining: timeUntil,
+                nextPhase: firstMeal.phase,
+                nextPhaseStart: nextStart,
+                isOpen: false,
+                currentMealEnd: nil
+            )
+        }
+        
+        return ChucksStatus(
+            currentPhase: .closed,
+            timeRemaining: nil,
+            nextPhase: nil,
+            nextPhaseStart: nil,
+            isOpen: false,
+            currentMealEnd: nil
+        )
+    }
+}
+
+// MARK: - TimeInterval Extension
+
+extension TimeInterval {
+    var countdownText: String {
+        let totalSeconds = Int(self)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        
+        if hours > 0 {
+            return "\(hours)h"
+        } else if minutes > 0 {
+            return "\(minutes)m"
+        } else {
+            return "\(seconds)s"
+        }
+    }
+}
+
+// MARK: - API Service
+
+actor ChucksService {
+    static let shared = ChucksService()
+    
+    private let baseURL = "https://diningdata.cedarville.edu/api/menus"
+    private var cachedMenu: MenuResponse?
+    private var cacheDate: Date?
+    private let cacheExpiration: TimeInterval = 3600
+    
+    func fetchMenu(days: Int = 5) async throws -> MenuResponse {
+        if let cached = cachedMenu,
+           let date = cacheDate,
+           Date().timeIntervalSince(date) < cacheExpiration {
+            return cached
+        }
+        
+        guard let url = URL(string: "\(baseURL)?days=\(days)") else {
+            throw ChucksError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        request.setValue("https://www.cedarville.edu", forHTTPHeaderField: "Origin")
+        request.setValue("https://www.cedarville.edu/offices/the-commons", forHTTPHeaderField: "Referer")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw ChucksError.networkError
+        }
+        
+        let menu = try JSONDecoder().decode(MenuResponse.self, from: data)
+        cachedMenu = menu
+        cacheDate = Date()
+        
+        return menu
+    }
+    
+    func getSpecials(for date: Date, phase: MealPhase) async throws -> [MenuItem] {
+        let menu = try await fetchMenu()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateKey = dateFormatter.string(from: date)
+        
+        guard let dayMenu = menu[dateKey] else {
+            return []
+        }
+        
+        let slot = await phase.apiSlot
+        let homeCooking = dayMenu.filter { $0.venue == "Home Cooking" && $0.slot == slot }
+        return homeCooking.flatMap { $0.items }
+    }
+}
+
+enum ChucksError: Error {
+    case invalidURL
+    case networkError
+    case decodingError
+}
