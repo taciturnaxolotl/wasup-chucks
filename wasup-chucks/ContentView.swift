@@ -240,14 +240,7 @@ struct MealDetailSheet: View {
                                     .accessibilityLabel("\(item.name), \(item.allergens.map { $0.alt }.joined(separator: ", "))")
                                 }
                             } header: {
-                                HStack {
-                                    if venue.venue == "Home Cooking" {
-                                        Image(systemName: "star.fill")
-                                            .foregroundStyle(.orange)
-                                            .font(.caption2)
-                                    }
-                                    Text(venue.venue)
-                                }
+                                Text(venue.venue)
                             }
                         }
                     }
@@ -367,12 +360,6 @@ struct VenueSection: View {
             .padding(.top, 8)
         } label: {
             HStack(spacing: 6) {
-                if isHighlighted {
-                    Image(systemName: "star.fill")
-                        .foregroundStyle(.orange)
-                        .font(.caption)
-                        .accessibilityLabel("Featured")
-                }
                 Text(venue.venue)
                     .font(.subheadline.weight(.semibold))
             }
