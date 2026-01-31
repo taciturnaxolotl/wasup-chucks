@@ -66,6 +66,7 @@ struct ContentView: View {
             let menu = try await ChucksService.shared.fetchMenu()
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
+            dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
             let dateKey = dateFormatter.string(from: Date())
             todayMenu = menu[dateKey] ?? []
         } catch {

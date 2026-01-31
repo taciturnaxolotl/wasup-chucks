@@ -33,7 +33,6 @@ typealias MenuResponse = [String: [VenueMenu]]
 
 enum MealPhase: String, CaseIterable {
     case breakfast = "Breakfast"
-    case brunch = "Brunch"
     case lunch = "Lunch"
     case dinner = "Dinner"
     case closed = "Closed"
@@ -41,9 +40,8 @@ enum MealPhase: String, CaseIterable {
     var icon: String {
         switch self {
         case .breakfast: return "cup.and.saucer.fill"
-        case .brunch: return "fork.knife"
-        case .lunch: return "sun.max.fill"
-        case .dinner: return "moon.stars.fill"
+        case .lunch: return "takeoutbag.and.cup.and.straw.fill"
+        case .dinner: return "fork.knife.circle.fill"
         case .closed: return "moon.zzz.fill"
         }
     }
@@ -51,7 +49,6 @@ enum MealPhase: String, CaseIterable {
     var shortName: String {
         switch self {
         case .breakfast: return "Breakfast"
-        case .brunch: return "Brunch"
         case .lunch: return "Lunch"
         case .dinner: return "Dinner"
         case .closed: return "Closed"
@@ -60,7 +57,7 @@ enum MealPhase: String, CaseIterable {
     
     var apiSlot: String {
         switch self {
-        case .breakfast, .brunch: return "breakfast"
+        case .breakfast: return "breakfast"
         case .lunch: return "lunch"
         case .dinner: return "dinner"
         case .closed: return ""
@@ -86,10 +83,10 @@ struct MealSchedule {
         MealSchedule(phase: .dinner, startHour: 16, startMinute: 30, endHour: 19, endMinute: 30)
     ]
     
-    // Saturday: Continental 8-9, Brunch 11-1, Dinner 4:30-6:30
+    // Saturday: Continental 8-9, Lunch 11-1, Dinner 4:30-6:30
     static let saturdaySchedule: [MealSchedule] = [
         MealSchedule(phase: .breakfast, startHour: 8, startMinute: 0, endHour: 9, endMinute: 0),
-        MealSchedule(phase: .brunch, startHour: 11, startMinute: 0, endHour: 13, endMinute: 0),
+        MealSchedule(phase: .lunch, startHour: 11, startMinute: 0, endHour: 13, endMinute: 0),
         MealSchedule(phase: .dinner, startHour: 16, startMinute: 30, endHour: 18, endMinute: 30)
     ]
     
@@ -109,6 +106,14 @@ struct MealSchedule {
     }
 }
 
+struct CedarvilleTime {
+    static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        return calendar
+    }
+}
+
 struct ChucksStatus {
     let currentPhase: MealPhase
     let timeRemaining: TimeInterval?
@@ -118,7 +123,7 @@ struct ChucksStatus {
     let currentMealEnd: Date?
     
     static func calculate(for date: Date = Date()) -> ChucksStatus {
-        let calendar = Calendar.current
+        let calendar = CedarvilleTime.calendar
         let weekday = calendar.component(.weekday, from: date)
         let schedule = MealSchedule.schedule(for: weekday)
         
@@ -263,6 +268,7 @@ actor ChucksService {
         let menu = try await fetchMenu()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
         let dateKey = dateFormatter.string(from: date)
         
         guard let dayMenu = menu[dateKey] else {
@@ -312,9 +318,10 @@ struct ChucksProvider: TimelineProvider {
             var specials: [MenuItem] = []
             
             let phase = status.isOpen ? status.currentPhase : (status.nextPhase ?? .lunch)
+            let menuDate = status.isOpen ? Date() : (status.nextPhaseStart ?? Date())
             if phase != .closed {
                 do {
-                    specials = try await ChucksService.shared.getSpecials(for: Date(), phase: phase)
+                    specials = try await ChucksService.shared.getSpecials(for: menuDate, phase: phase)
                 } catch {
                     print("Failed to fetch specials: \(error)")
                 }
