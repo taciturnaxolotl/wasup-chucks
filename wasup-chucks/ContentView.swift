@@ -200,30 +200,24 @@ struct MealDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     var venues: [VenueMenu] {
-        let matching = menu.filter { $0.slot == meal.phase.apiSlot || $0.slot == "anytime" }
-        // Merge venues that appear with both meal-specific and anytime slots
-        var merged: [String: VenueMenu] = [:]
-        for venue in matching {
-            if let existing = merged[venue.venue] {
-                // Combine items, preferring meal-specific slot
-                let combinedItems = existing.items + venue.items.filter { item in
-                    !existing.items.contains { $0.name == item.name }
-                }
-                let preferredSlot = existing.slot != "anytime" ? existing.slot : venue.slot
-                merged[venue.venue] = VenueMenu(venue: venue.venue, meal: venue.meal ?? existing.meal, slot: preferredSlot, items: combinedItems)
-            } else {
-                merged[venue.venue] = venue
-            }
-        }
-        return Array(merged.values).sorted { $0.venue < $1.venue }
+        // Only show meal-specific stations (not anytime)
+        menu.filter { $0.slot == meal.phase.apiSlot }
+            .sorted { $0.venue < $1.venue }
     }
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ForEach(venues) { venue in
-                        StationCard(venue: venue, highlightAsSpecial: venue.venue == "Home Cooking")
+                    if venues.isEmpty {
+                        Text("No specific menu for \(meal.phase.rawValue)")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 40)
+                    } else {
+                        ForEach(venues) { venue in
+                            StationCard(venue: venue, highlightAsSpecial: venue.venue == "Home Cooking")
+                        }
                     }
                 }
                 .padding()
@@ -248,32 +242,93 @@ struct CurrentMealView: View {
     let slot: String
     let isOpen: Bool
     
-    var specialsVenue: VenueMenu? {
-        menu.first { $0.venue == "Home Cooking" && $0.slot == slot }
+    var mealSpecificVenues: [VenueMenu] {
+        menu.filter { $0.slot == slot }
+            .sorted { $0.venue < $1.venue }
+    }
+    
+    var alwaysAvailableVenues: [VenueMenu] {
+        menu.filter { $0.slot == "anytime" }
+            .sorted { $0.venue < $1.venue }
+    }
+    
+    var mealLabel: String {
+        switch slot {
+        case "breakfast": return "Breakfast"
+        case "lunch": return "Lunch"
+        case "dinner": return "Dinner"
+        default: return "This Meal"
+        }
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let specials = specialsVenue, !specials.items.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Home Cooking")
+        VStack(alignment: .leading, spacing: 24) {
+            // Meal-specific stations
+            if !mealSpecificVenues.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("\(mealLabel) Only", systemImage: "clock.fill")
                         .font(.headline)
+                        .foregroundStyle(.primary)
                     
-                    ForEach(specials.items) { item in
-                        HStack(spacing: 8) {
-                            Text("•")
-                                .foregroundStyle(.secondary)
-                            Text(item.name)
-                                .font(.body)
-                            Spacer()
-                            AllergenRow(allergens: item.allergens)
-                        }
+                    ForEach(mealSpecificVenues, id: \.venue) { venue in
+                        VenueSection(venue: venue)
                     }
                 }
                 .padding()
                 .background(.regularMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
+            
+            // Divider between sections
+            if !mealSpecificVenues.isEmpty && !alwaysAvailableVenues.isEmpty {
+                HStack {
+                    VStack { Divider() }
+                    Text("Always Available")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    VStack { Divider() }
+                }
+                .padding(.vertical, 4)
+            }
+            
+            // Always available stations
+            if !alwaysAvailableVenues.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(alwaysAvailableVenues, id: \.venue) { venue in
+                        VenueSection(venue: venue)
+                    }
+                }
+                .padding()
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+        }
+    }
+}
+
+struct VenueSection: View {
+    let venue: VenueMenu
+    @State private var isExpanded = true
+    
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(venue.items) { item in
+                    HStack(spacing: 8) {
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        Text(item.name)
+                            .font(.subheadline)
+                        Spacer()
+                        AllergenRow(allergens: item.allergens)
+                    }
+                }
+            }
+            .padding(.top, 4)
+        } label: {
+            Text(venue.venue)
+                .font(.subheadline)
+                .fontWeight(.medium)
         }
     }
 }
