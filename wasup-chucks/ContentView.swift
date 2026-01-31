@@ -30,7 +30,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     StatusCard(status: status)
                     
                     ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
@@ -42,7 +42,8 @@ struct ContentView: View {
                         CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
             .navigationTitle("Wasup Chucks")
             .onReceive(timer) { _ in
@@ -81,18 +82,22 @@ struct ContentView: View {
 struct StatusCard: View {
     let status: ChucksStatus
     
+    private var statusColor: Color {
+        status.isOpen ? .green : .orange
+    }
+    
     var body: some View {
         VStack(spacing: 8) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: status.isOpen ? status.currentPhase.icon : (status.nextPhase?.icon ?? "moon.zzz.fill"))
                     .font(.title2)
-                    .foregroundStyle(status.isOpen ? .green : .orange)
+                    .foregroundStyle(statusColor)
+                    .accessibilityHidden(true)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(status.isOpen ? "Open" : "Closed")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(status.isOpen ? .green : .orange)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(statusColor)
                     Text(status.isOpen ? status.currentPhase.rawValue : (status.nextPhase?.rawValue ?? ""))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -100,21 +105,24 @@ struct StatusCard: View {
                 
                 Spacer()
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(status.isOpen ? "Chuck's is currently open for \(status.currentPhase.rawValue)" : "Chuck's is closed")
             
             if let remaining = status.timeRemaining {
-                Text(remaining.countdownText)
-                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                Text(remaining.expandedCountdown)
+                    .font(.system(size: 64, weight: .bold, design: .rounded))
                     .monospacedDigit()
+                    .contentTransition(.numericText())
                 
                 Text(status.isOpen ? "until \(status.currentPhase.shortName) ends" : "until \(status.nextPhase?.shortName ?? "open")")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
     }
 }
 
@@ -145,10 +153,10 @@ struct ScheduleCard: View {
                 }
             }
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
     }
 }
 
@@ -159,27 +167,31 @@ struct ScheduleButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 Image(systemName: meal.phase.icon)
                     .font(.title3)
+                    .accessibilityHidden(true)
                 
                 Text(meal.phase.shortName)
-                    .font(.caption2)
-                    .fontWeight(.medium)
+                    .font(.caption.weight(.medium))
                 
                 Text("\(formatTime(meal.startHour, meal.startMinute))-\(formatTime(meal.endHour, meal.endMinute))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
+            .background(isCurrent ? Color.green.opacity(0.15) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .stroke(isCurrent ? Color.green : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
         .foregroundStyle(isCurrent ? .green : .primary)
+        .sensoryFeedback(.selection, trigger: meal.phase)
+        .accessibilityLabel("\(meal.phase.shortName), \(formatTime(meal.startHour, meal.startMinute)) to \(formatTime(meal.endHour, meal.endMinute))\(isCurrent ? ", current meal" : "")")
+        .accessibilityHint("Double tap to view menu")
     }
     
     func formatTime(_ hour: Int, _ minute: Int) -> String {
@@ -200,27 +212,47 @@ struct MealDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     var venues: [VenueMenu] {
-        // Only show meal-specific stations (not anytime)
         menu.filter { $0.slot == meal.phase.apiSlot }
             .sorted { $0.venue < $1.venue }
     }
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if venues.isEmpty {
-                        Text("No specific menu for \(meal.phase.rawValue)")
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.top, 40)
-                    } else {
+            Group {
+                if venues.isEmpty {
+                    ContentUnavailableView(
+                        "No Menu Available",
+                        systemImage: "fork.knife.circle",
+                        description: Text("No specific menu items for \(meal.phase.rawValue) today.")
+                    )
+                } else {
+                    List {
                         ForEach(venues) { venue in
-                            StationCard(venue: venue, highlightAsSpecial: venue.venue == "Home Cooking")
+                            Section {
+                                ForEach(venue.items) { item in
+                                    HStack {
+                                        Text(item.name)
+                                            .font(.body)
+                                        Spacer()
+                                        AllergenRow(allergens: item.allergens)
+                                    }
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityLabel("\(item.name), \(item.allergens.map { $0.alt }.joined(separator: ", "))")
+                                }
+                            } header: {
+                                HStack {
+                                    if venue.venue == "Home Cooking" {
+                                        Image(systemName: "star.fill")
+                                            .foregroundStyle(.orange)
+                                            .font(.caption2)
+                                    }
+                                    Text(venue.venue)
+                                }
+                            }
                         }
                     }
+                    .listStyle(.insetGrouped)
                 }
-                .padding()
             }
             .navigationTitle(meal.phase.rawValue)
             .navigationBarTitleDisplayMode(.inline)
@@ -229,9 +261,12 @@ struct MealDetailSheet: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .fontWeight(.semibold)
                 }
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -262,45 +297,46 @@ struct CurrentMealView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            // Meal-specific stations
+        VStack(alignment: .leading, spacing: 16) {
             if !mealSpecificVenues.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("\(mealLabel) Only", systemImage: "clock.fill")
+                    Label("\(mealLabel) Specials", systemImage: "clock.fill")
                         .font(.headline)
                         .foregroundStyle(.primary)
                     
-                    ForEach(mealSpecificVenues, id: \.venue) { venue in
-                        VenueSection(venue: venue)
+                    ForEach(mealSpecificVenues) { venue in
+                        VenueSection(venue: venue, isHighlighted: venue.venue == "Home Cooking")
                     }
                 }
-                .padding()
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(16)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
             }
             
-            // Divider between sections
             if !mealSpecificVenues.isEmpty && !alwaysAvailableVenues.isEmpty {
-                HStack {
-                    VStack { Divider() }
+                HStack(spacing: 12) {
+                    Rectangle()
+                        .fill(.secondary.opacity(0.3))
+                        .frame(height: 1)
                     Text("Always Available")
-                        .font(.caption)
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
-                    VStack { Divider() }
+                    Rectangle()
+                        .fill(.secondary.opacity(0.3))
+                        .frame(height: 1)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 8)
             }
             
-            // Always available stations
             if !alwaysAvailableVenues.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(alwaysAvailableVenues, id: \.venue) { venue in
-                        VenueSection(venue: venue)
+                    ForEach(alwaysAvailableVenues) { venue in
+                        VenueSection(venue: venue, isHighlighted: false)
                     }
                 }
-                .padding()
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(16)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
             }
         }
     }
@@ -308,65 +344,40 @@ struct CurrentMealView: View {
 
 struct VenueSection: View {
     let venue: VenueMenu
+    let isHighlighted: Bool
     @State private var isExpanded = true
     
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(venue.items) { item in
                     HStack(spacing: 8) {
-                        Text("•")
-                            .foregroundStyle(.secondary)
+                        Circle()
+                            .fill(.secondary.opacity(0.5))
+                            .frame(width: 4, height: 4)
                         Text(item.name)
                             .font(.subheadline)
                         Spacer()
                         AllergenRow(allergens: item.allergens)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(item.name)")
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, 8)
         } label: {
-            Text(venue.venue)
-                .font(.subheadline)
-                .fontWeight(.medium)
-        }
-    }
-}
-
-// MARK: - Station Card
-
-struct StationCard: View {
-    let venue: VenueMenu
-    let highlightAsSpecial: Bool
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                if highlightAsSpecial {
+            HStack(spacing: 6) {
+                if isHighlighted {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.orange)
                         .font(.caption)
+                        .accessibilityLabel("Featured")
                 }
                 Text(venue.venue)
-                    .font(.headline)
-                Spacer()
-            }
-            
-            ForEach(venue.items) { item in
-                HStack(spacing: 8) {
-                    Text("•")
-                        .foregroundStyle(.secondary)
-                    Text(item.name)
-                        .font(.subheadline)
-                    Spacer()
-                    AllergenRow(allergens: item.allergens)
-                }
+                    .font(.subheadline.weight(.semibold))
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .sensoryFeedback(.selection, trigger: isExpanded)
     }
 }
 
@@ -377,11 +388,29 @@ struct AllergenRow: View {
     
     var body: some View {
         if !allergens.isEmpty {
-            HStack(spacing: 2) {
+            HStack(spacing: 4) {
                 ForEach(allergens, id: \.alt) { allergen in
                     AllergenBadge(allergen: allergen)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Contains: \(allergens.map { allergenName($0.alt) }.joined(separator: ", "))")
+        }
+    }
+    
+    private func allergenName(_ alt: String) -> String {
+        switch alt {
+        case "gluten": return "gluten"
+        case "dairy": return "dairy"
+        case "egg": return "egg"
+        case "soy": return "soy"
+        case "fish": return "fish"
+        case "hasPeanut": return "peanuts"
+        case "tree nut": return "tree nuts"
+        case "hasShellfish": return "shellfish"
+        case "vegetarian": return "vegetarian"
+        case "gluten-free": return "gluten-free"
+        default: return alt
         }
     }
 }
@@ -414,12 +443,12 @@ struct AllergenBadge: View {
     
     var body: some View {
         Text(symbol)
-            .font(.system(size: 8, weight: .bold))
+            .font(.system(size: 9, weight: .bold, design: .rounded))
             .foregroundStyle(color)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.15))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+            .accessibilityHidden(true)
     }
 }
 

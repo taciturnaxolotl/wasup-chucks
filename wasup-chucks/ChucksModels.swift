@@ -217,13 +217,32 @@ struct ChucksStatus {
 // MARK: - TimeInterval Extension
 
 extension TimeInterval {
-    var countdownText: String {
+    /// Compact format for widgets: "2h" or "45m" or "30s"
+    var compactCountdown: String {
         let totalSeconds = Int(self)
         let hours = totalSeconds / 3600
         let minutes = (totalSeconds % 3600) / 60
         let seconds = totalSeconds % 60
         
         if hours > 0 {
+            return "\(hours)h"
+        } else if minutes > 0 {
+            return "\(minutes)m"
+        } else {
+            return "\(seconds)s"
+        }
+    }
+    
+    /// Expanded format for app: "2h 15m" or "45m" or "30s"
+    var expandedCountdown: String {
+        let totalSeconds = Int(self)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        
+        if hours > 0 && minutes > 0 {
+            return "\(hours)h \(minutes)m"
+        } else if hours > 0 {
             return "\(hours)h"
         } else if minutes > 0 {
             return "\(minutes)m"

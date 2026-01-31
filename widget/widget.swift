@@ -208,7 +208,8 @@ struct ChucksStatus {
 }
 
 extension TimeInterval {
-    var countdownText: String {
+    /// Compact format for widgets: "2h" or "45m" or "30s"
+    var compactCountdown: String {
         let totalSeconds = Int(self)
         let hours = totalSeconds / 3600
         let minutes = (totalSeconds % 3600) / 60
@@ -264,7 +265,8 @@ actor ChucksService {
         return menu
     }
     
-    func getSpecials(for date: Date, phase: MealPhase) async throws -> [MenuItem] {
+    func getSpecials(for date: Date, phase: MealPhase) async throws -> (items: [MenuItem], venueName: String) {
+        let venueName = "Home Cooking"
         let menu = try await fetchMenu()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -272,11 +274,11 @@ actor ChucksService {
         let dateKey = dateFormatter.string(from: date)
         
         guard let dayMenu = menu[dateKey] else {
-            return []
+            return ([], venueName)
         }
         
-        let homeCooking = dayMenu.filter { $0.venue == "Home Cooking" && $0.slot == phase.apiSlot }
-        return homeCooking.flatMap { $0.items }
+        let venue = dayMenu.filter { $0.venue == venueName && $0.slot == phase.apiSlot }
+        return (venue.flatMap { $0.items }, venueName)
     }
 }
 
@@ -292,6 +294,7 @@ struct ChucksEntry: TimelineEntry {
     let date: Date
     let status: ChucksStatus
     let specials: [MenuItem]
+    let venueName: String
 }
 
 struct ChucksProvider: TimelineProvider {
@@ -299,7 +302,8 @@ struct ChucksProvider: TimelineProvider {
         ChucksEntry(
             date: Date(),
             status: ChucksStatus.calculate(),
-            specials: []
+            specials: [],
+            venueName: "Home Cooking"
         )
     }
     
@@ -307,7 +311,8 @@ struct ChucksProvider: TimelineProvider {
         let entry = ChucksEntry(
             date: Date(),
             status: ChucksStatus.calculate(),
-            specials: []
+            specials: [],
+            venueName: "Home Cooking"
         )
         completion(entry)
     }
@@ -316,12 +321,15 @@ struct ChucksProvider: TimelineProvider {
         Task {
             let status = ChucksStatus.calculate()
             var specials: [MenuItem] = []
+            var venueName = "Home Cooking"
             
             let phase = status.isOpen ? status.currentPhase : (status.nextPhase ?? .lunch)
             let menuDate = status.isOpen ? Date() : (status.nextPhaseStart ?? Date())
             if phase != .closed {
                 do {
-                    specials = try await ChucksService.shared.getSpecials(for: menuDate, phase: phase)
+                    let result = try await ChucksService.shared.getSpecials(for: menuDate, phase: phase)
+                    specials = result.items
+                    venueName = result.venueName
                 } catch {
                     print("Failed to fetch specials: \(error)")
                 }
@@ -330,7 +338,8 @@ struct ChucksProvider: TimelineProvider {
             let entry = ChucksEntry(
                 date: Date(),
                 status: status,
-                specials: specials
+                specials: specials,
+                venueName: venueName
             )
             
             let nextUpdate: Date
@@ -353,26 +362,30 @@ struct ChucksProvider: TimelineProvider {
 struct SmallWidgetView: View {
     let entry: ChucksEntry
     
+    private var statusColor: Color {
+        entry.status.isOpen ? .green : .orange
+    }
+    
     var body: some View {
         ZStack {
-            // Status indicator in top-left corner
             VStack {
-                HStack {
+                HStack(spacing: 4) {
                     Image(systemName: entry.status.isOpen ? entry.status.currentPhase.icon : (entry.status.nextPhase?.icon ?? "moon.zzz.fill"))
-                        .foregroundStyle(entry.status.isOpen ? .green : .orange)
+                        .foregroundStyle(statusColor)
+                        .accessibilityHidden(true)
                     Text(entry.status.isOpen ? "Open" : "Closed")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(entry.status.isOpen ? .green : .orange)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(statusColor)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(entry.status.isOpen ? "Chuck's is open for \(entry.status.currentPhase.shortName)" : "Chuck's is closed")
                 Spacer()
             }
             
-            // Centered countdown
             VStack(spacing: 4) {
                 if let remaining = entry.status.timeRemaining {
-                    Text(remaining.countdownText)
+                    Text(remaining.compactCountdown)
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .minimumScaleFactor(0.5)
@@ -401,21 +414,26 @@ struct SmallWidgetView: View {
 struct MediumWidgetView: View {
     let entry: ChucksEntry
     
+    private var statusColor: Color {
+        entry.status.isOpen ? .green : .orange
+    }
+    
     var body: some View {
-        HStack(spacing: 12) {
-            // Left side - big countdown
+        HStack(spacing: 16) {
             VStack(spacing: 4) {
-                HStack {
+                HStack(spacing: 4) {
                     Image(systemName: entry.status.isOpen ? entry.status.currentPhase.icon : (entry.status.nextPhase?.icon ?? "moon.zzz.fill"))
-                        .foregroundStyle(entry.status.isOpen ? .green : .orange)
+                        .foregroundStyle(statusColor)
+                        .accessibilityHidden(true)
                     Text(entry.status.isOpen ? "Open" : "Closed")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(entry.status.isOpen ? .green : .orange)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(statusColor)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(entry.status.isOpen ? "Chuck's is open" : "Chuck's is closed")
                 
                 if let remaining = entry.status.timeRemaining {
-                    Text(remaining.countdownText)
+                    Text(remaining.compactCountdown)
                         .font(.system(size: 44, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .minimumScaleFactor(0.5)
@@ -431,19 +449,15 @@ struct MediumWidgetView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                
             }
             .frame(maxWidth: .infinity)
             
             Divider()
             
-            // Right side - specials list
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Home Cooking")
-                    .font(.caption)
-                    .fontWeight(.semibold)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.venueName)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .padding(.bottom, 2)
                 
                 if entry.specials.isEmpty {
                     Spacer()
@@ -452,14 +466,17 @@ struct MediumWidgetView: View {
                         .foregroundStyle(.tertiary)
                     Spacer()
                 } else {
-                    ForEach(entry.specials) { item in
+                    ForEach(entry.specials.prefix(4)) { item in
                         Text("• \(item.name)")
                             .font(.caption2)
+                            .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Today's specials from \(entry.venueName): \(entry.specials.map { $0.name }.joined(separator: ", "))")
         }
     }
 }
@@ -468,34 +485,36 @@ struct MediumWidgetView: View {
 struct LargeWidgetView: View {
     let entry: ChucksEntry
     
+    private var statusColor: Color {
+        entry.status.isOpen ? .green : .orange
+    }
+    
     var body: some View {
         VStack(spacing: 16) {
-            // Top section - status and countdown
             HStack(alignment: .center) {
-                // Left - status
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: entry.status.isOpen ? entry.status.currentPhase.icon : (entry.status.nextPhase?.icon ?? "moon.zzz.fill"))
                         .font(.title2)
-                        .foregroundStyle(entry.status.isOpen ? .green : .orange)
+                        .foregroundStyle(statusColor)
+                        .accessibilityHidden(true)
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.status.isOpen ? "Open" : "Closed")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(entry.status.isOpen ? .green : .orange)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(statusColor)
                         
                         Text(entry.status.isOpen ? entry.status.currentPhase.shortName : (entry.status.nextPhase?.shortName ?? ""))
-                            .font(.headline)
-                            .fontWeight(.bold)
+                            .font(.headline.weight(.bold))
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(entry.status.isOpen ? "Chuck's is open for \(entry.status.currentPhase.shortName)" : "Chuck's is closed, next meal is \(entry.status.nextPhase?.shortName ?? "tomorrow")")
                 
                 Spacer()
                 
-                // Right - big countdown
                 if let remaining = entry.status.timeRemaining {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(remaining.countdownText)
+                        Text(remaining.compactCountdown)
                             .font(.system(size: 48, weight: .bold, design: .rounded))
                             .monospacedDigit()
                         
@@ -508,11 +527,9 @@ struct LargeWidgetView: View {
             
             Divider()
             
-            // Bottom section - specials
             VStack(alignment: .leading, spacing: 8) {
-                Text("Home Cooking")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                Text(entry.venueName)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 
                 if entry.specials.isEmpty {
@@ -526,8 +543,8 @@ struct LargeWidgetView: View {
                     }
                     Spacer()
                 } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(entry.specials) { item in
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(entry.specials.prefix(6)) { item in
                             Text("• \(item.name)")
                                 .font(.callout)
                         }
@@ -535,6 +552,8 @@ struct LargeWidgetView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Today's specials from \(entry.venueName): \(entry.specials.map { $0.name }.joined(separator: ", "))")
         }
     }
 }
@@ -576,7 +595,7 @@ struct WidgetView: View {
 #Preview("Small", as: .systemSmall) {
     ChucksWidget()
 } timeline: {
-    ChucksEntry(date: Date(), status: ChucksStatus.calculate(), specials: [])
+    ChucksEntry(date: Date(), status: ChucksStatus.calculate(), specials: [], venueName: "Home Cooking")
 }
 
 #Preview("Medium", as: .systemMedium) {
@@ -587,7 +606,7 @@ struct WidgetView: View {
         MenuItem(name: "Sausage Patties", allergens: []),
         MenuItem(name: "Tater Tots", allergens: []),
         MenuItem(name: "Biscuits", allergens: [])
-    ])
+    ], venueName: "Home Cooking")
 }
 
 #Preview("Large", as: .systemLarge) {
@@ -600,5 +619,5 @@ struct WidgetView: View {
         MenuItem(name: "Biscuits", allergens: []),
         MenuItem(name: "Country Gravy", allergens: []),
         MenuItem(name: "Hash Browns", allergens: [])
-    ])
+    ], venueName: "Home Cooking")
 }
