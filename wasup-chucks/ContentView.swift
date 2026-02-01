@@ -15,7 +15,8 @@ struct ContentView: View {
     @State private var todayMenu: [VenueMenu] = []
     @State private var isLoading = true
     @State private var selectedMeal: MealSchedule? = nil
-    
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var currentSlot: String {
@@ -27,23 +28,40 @@ struct ContentView: View {
         return "lunch"
     }
     
+    private var isRegularWidth: Bool {
+        horizontalSizeClass == .regular
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    StatusCard(status: status)
-                    
-                    ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
-                    
+                    if isRegularWidth {
+                        // iPad: Two-column layout for top cards
+                        HStack(spacing: 16) {
+                            StatusCard(status: status)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                            ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        // iPhone: Stacked layout
+                        StatusCard(status: status)
+                        ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+                    }
+
                     if isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity, minHeight: 200)
                     } else {
-                        CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen)
+                        CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
+                .frame(maxWidth: isRegularWidth ? 900 : .infinity)
+                .frame(maxWidth: .infinity)
             }
             .navigationTitle("Wasup Chucks")
             .onReceive(timer) { _ in
@@ -120,7 +138,7 @@ struct StatusCard: View {
             }
         }
         .padding(16)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
     }
@@ -154,7 +172,7 @@ struct ScheduleCard: View {
             }
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
     }
@@ -269,17 +287,18 @@ struct CurrentMealView: View {
     let menu: [VenueMenu]
     let slot: String
     let isOpen: Bool
-    
+    let isRegularWidth: Bool
+
     var mealSpecificVenues: [VenueMenu] {
         menu.filter { $0.slot == slot }
             .sorted { $0.venue < $1.venue }
     }
-    
+
     var alwaysAvailableVenues: [VenueMenu] {
         menu.filter { $0.slot == "anytime" }
             .sorted { $0.venue < $1.venue }
     }
-    
+
     var mealLabel: String {
         switch slot {
         case "breakfast": return "Breakfast"
@@ -288,58 +307,96 @@ struct CurrentMealView: View {
         default: return "This Meal"
         }
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Meal Specials Section
             if !mealSpecificVenues.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("\(mealLabel) Specials", systemImage: "clock.fill")
                         .font(.headline)
                         .foregroundStyle(.primary)
-                    
-                    ForEach(mealSpecificVenues) { venue in
-                        VenueSection(venue: venue, isHighlighted: venue.venue == "Home Cooking")
+                        .padding(.horizontal, 4)
+
+                    MasonryLayout(mealSpecificVenues, columns: isRegularWidth ? 2 : 1, spacing: 12) { venue in
+                        VenueCard(venue: venue)
                     }
                 }
-                .padding(16)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
             }
-            
-            if !mealSpecificVenues.isEmpty && !alwaysAvailableVenues.isEmpty {
-                HStack(spacing: 12) {
-                    Rectangle()
-                        .fill(.secondary.opacity(0.3))
-                        .frame(height: 1)
-                    Text("Always Available")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    Rectangle()
-                        .fill(.secondary.opacity(0.3))
-                        .frame(height: 1)
-                }
-                .padding(.vertical, 8)
-            }
-            
+
+            // Always Available Section
             if !alwaysAvailableVenues.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(alwaysAvailableVenues) { venue in
-                        VenueSection(venue: venue, isHighlighted: false)
+                    if !mealSpecificVenues.isEmpty {
+                        HStack(spacing: 12) {
+                            Rectangle()
+                                .fill(.secondary.opacity(0.3))
+                                .frame(height: 1)
+                            Text("Always Available")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Rectangle()
+                                .fill(.secondary.opacity(0.3))
+                                .frame(height: 1)
+                        }
+                        .padding(.top, 8)
+                    }
+
+                    MasonryLayout(alwaysAvailableVenues, columns: isRegularWidth ? 2 : 1, spacing: 12) { venue in
+                        VenueCard(venue: venue)
                     }
                 }
-                .padding(16)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
             }
         }
     }
 }
 
-struct VenueSection: View {
+// MARK: - Masonry Layout
+
+struct MasonryLayout<Data: RandomAccessCollection, Content: View>: View where Data.Element: Identifiable {
+    let data: Data
+    let columns: Int
+    let spacing: CGFloat
+    let content: (Data.Element) -> Content
+
+    init(_ data: Data, columns: Int = 2, spacing: CGFloat = 12, @ViewBuilder content: @escaping (Data.Element) -> Content) {
+        self.data = data
+        self.columns = columns
+        self.spacing = spacing
+        self.content = content
+    }
+
+    private func itemsForColumn(_ column: Int) -> [Data.Element] {
+        data.enumerated().compactMap { index, item in
+            index % columns == column ? item : nil
+        }
+    }
+
+    var body: some View {
+        if columns == 1 {
+            VStack(spacing: spacing) {
+                ForEach(data) { item in
+                    content(item)
+                }
+            }
+        } else {
+            HStack(alignment: .top, spacing: spacing) {
+                ForEach(0..<columns, id: \.self) { column in
+                    VStack(spacing: spacing) {
+                        ForEach(itemsForColumn(column)) { item in
+                            content(item)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct VenueCard: View {
     let venue: VenueMenu
-    let isHighlighted: Bool
     @State private var isExpanded = true
-    
+
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
@@ -359,12 +416,14 @@ struct VenueSection: View {
             }
             .padding(.top, 8)
         } label: {
-            HStack(spacing: 6) {
-                Text(venue.venue)
-                    .font(.subheadline.weight(.semibold))
-            }
+            Text(venue.venue)
+                .font(.subheadline.weight(.semibold))
         }
         .sensoryFeedback(.selection, trigger: isExpanded)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
     }
 }
 
