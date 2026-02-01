@@ -1,4 +1,4 @@
-# Wasup Chucks
+# Wasup Chuck's
 
 ios widget showing what is available at chucks
 

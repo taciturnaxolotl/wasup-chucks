@@ -63,7 +63,7 @@ struct ContentView: View {
                 .frame(maxWidth: isRegularWidth ? 900 : .infinity)
                 .frame(maxWidth: .infinity)
             }
-            .navigationTitle("Wasup Chucks")
+            .navigationTitle("Wasup Chuck's")
             .onReceive(timer) { _ in
                 status = ChucksStatus.calculate()
             }
@@ -419,6 +419,7 @@ struct VenueCard: View {
             Text(venue.venue)
                 .font(.subheadline.weight(.semibold))
         }
+        .tint(.orange)
         .sensoryFeedback(.selection, trigger: isExpanded)
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
