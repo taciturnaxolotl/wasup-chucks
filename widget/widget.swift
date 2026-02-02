@@ -558,10 +558,89 @@ struct LargeWidgetView: View {
     }
 }
 
+// MARK: - Lock Screen Widgets
+
+struct AccessoryInlineView: View {
+    let entry: ChucksEntry
+
+    var body: some View {
+        if entry.status.isOpen {
+            if let remaining = entry.status.timeRemaining {
+                Label("Open • \(remaining.compactCountdown) left", systemImage: entry.status.currentPhase.icon)
+            } else {
+                Label("Open for \(entry.status.currentPhase.shortName)", systemImage: entry.status.currentPhase.icon)
+            }
+        } else if let next = entry.status.nextPhase, next != .closed {
+            if let remaining = entry.status.timeRemaining {
+                Label("\(next.shortName) in \(remaining.compactCountdown)", systemImage: next.icon)
+            } else {
+                Label("\(next.shortName) soon", systemImage: next.icon)
+            }
+        } else {
+            Label("Closed", systemImage: "moon.zzz.fill")
+        }
+    }
+}
+
+struct AccessoryCircularView: View {
+    let entry: ChucksEntry
+
+    var body: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            VStack(spacing: 0) {
+                Image(systemName: entry.status.isOpen ? entry.status.currentPhase.icon : (entry.status.nextPhase?.icon ?? "moon.zzz.fill"))
+                    .font(.caption)
+                if let remaining = entry.status.timeRemaining {
+                    Text(remaining.compactCountdown)
+                        .font(.system(.body, design: .rounded, weight: .semibold))
+                        .monospacedDigit()
+                }
+            }
+        }
+    }
+}
+
+struct AccessoryRectangularView: View {
+    let entry: ChucksEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: entry.status.isOpen ? entry.status.currentPhase.icon : (entry.status.nextPhase?.icon ?? "moon.zzz.fill"))
+                Text(entry.status.isOpen ? "Open" : "Closed")
+                    .font(.headline)
+            }
+
+            if entry.status.isOpen {
+                if let remaining = entry.status.timeRemaining {
+                    Text("\(entry.status.currentPhase.shortName) ends in \(remaining.compactCountdown)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let next = entry.status.nextPhase, next != .closed {
+                if let remaining = entry.status.timeRemaining {
+                    Text("\(next.shortName) opens in \(remaining.compactCountdown)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !entry.specials.isEmpty {
+                Text(entry.specials.prefix(2).map { $0.name }.joined(separator: ", "))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - Widget Configuration
 struct ChucksWidget: Widget {
     let kind: String = "ChucksWidget"
-    
+
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: ChucksProvider()) { entry in
             WidgetView(entry: entry)
@@ -569,14 +648,14 @@ struct ChucksWidget: Widget {
         }
         .configurationDisplayName("Chuck's Status")
         .description("See current meal times and specials at Chuck's.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryInline, .accessoryCircular, .accessoryRectangular])
     }
 }
 
 struct WidgetView: View {
     @Environment(\.widgetFamily) var family
     let entry: ChucksEntry
-    
+
     var body: some View {
         switch family {
         case .systemSmall:
@@ -585,6 +664,12 @@ struct WidgetView: View {
             MediumWidgetView(entry: entry)
         case .systemLarge:
             LargeWidgetView(entry: entry)
+        case .accessoryInline:
+            AccessoryInlineView(entry: entry)
+        case .accessoryCircular:
+            AccessoryCircularView(entry: entry)
+        case .accessoryRectangular:
+            AccessoryRectangularView(entry: entry)
         default:
             SmallWidgetView(entry: entry)
         }
@@ -619,5 +704,26 @@ struct WidgetView: View {
         MenuItem(name: "Biscuits", allergens: []),
         MenuItem(name: "Country Gravy", allergens: []),
         MenuItem(name: "Hash Browns", allergens: [])
+    ], venueName: "Home Cooking")
+}
+
+#Preview("Lock Screen - Inline", as: .accessoryInline) {
+    ChucksWidget()
+} timeline: {
+    ChucksEntry(date: Date(), status: ChucksStatus.calculate(), specials: [], venueName: "Home Cooking")
+}
+
+#Preview("Lock Screen - Circular", as: .accessoryCircular) {
+    ChucksWidget()
+} timeline: {
+    ChucksEntry(date: Date(), status: ChucksStatus.calculate(), specials: [], venueName: "Home Cooking")
+}
+
+#Preview("Lock Screen - Rectangular", as: .accessoryRectangular) {
+    ChucksWidget()
+} timeline: {
+    ChucksEntry(date: Date(), status: ChucksStatus.calculate(), specials: [
+        MenuItem(name: "Scrambled Eggs", allergens: []),
+        MenuItem(name: "Sausage Patties", allergens: [])
     ], venueName: "Home Cooking")
 }
