@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var status = ChucksStatus.calculate()
     @State private var todayMenu: [VenueMenu] = []
     @State private var isLoading = true
+    @State private var loadError: Error? = nil
     @State private var selectedMeal: MealSchedule? = nil
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -54,6 +55,10 @@ struct ContentView: View {
                     if isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity, minHeight: 200)
+                    } else if let error = loadError {
+                        ErrorCard(error: error) {
+                            Task { await loadMenu() }
+                        }
                     } else {
                         CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth)
                     }
@@ -81,6 +86,7 @@ struct ContentView: View {
     
     func loadMenu() async {
         isLoading = true
+        loadError = nil
         do {
             let menu = try await ChucksService.shared.fetchMenu()
             let dateFormatter = DateFormatter()
@@ -89,6 +95,7 @@ struct ContentView: View {
             let dateKey = dateFormatter.string(from: Date())
             todayMenu = menu[dateKey] ?? []
         } catch {
+            loadError = error
             print("Failed to load menu: \(error)")
         }
         isLoading = false
@@ -139,6 +146,54 @@ struct StatusCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+    }
+}
+
+// MARK: - Error Card
+
+struct ErrorCard: View {
+    let error: Error
+    let retry: () -> Void
+
+    private var errorMessage: String {
+        if let chucksError = error as? ChucksError {
+            switch chucksError {
+            case .invalidURL:
+                return "There was a problem with the request."
+            case .networkError:
+                return "Couldn't connect to the server. Check your internet connection."
+            case .decodingError:
+                return "The menu data couldn't be read."
+            }
+        }
+        return "Something went wrong loading the menu."
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+
+            Text("Menu Unavailable")
+                .font(.headline)
+
+            Text(errorMessage)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button(action: retry) {
+                Label("Try Again", systemImage: "arrow.clockwise")
+                    .font(.subheadline.weight(.medium))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
     }
@@ -503,4 +558,14 @@ struct AllergenBadge: View {
 
 #Preview {
     ContentView()
+}
+
+#Preview("Error - Network") {
+    ErrorCard(error: ChucksError.networkError) {}
+        .padding()
+}
+
+#Preview("Error - Decoding") {
+    ErrorCard(error: ChucksError.decodingError) {}
+        .padding()
 }
