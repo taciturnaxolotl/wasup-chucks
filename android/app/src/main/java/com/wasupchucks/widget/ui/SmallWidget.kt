@@ -7,16 +7,17 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.background
 import androidx.glance.layout.Alignment
-import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
-import androidx.glance.layout.fillMaxWidth
-import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
+import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -49,68 +50,61 @@ fun SmallWidgetContent(status: ChucksStatus) {
         else -> R.drawable.ic_closed
     }
 
-    Box(
+    Column(
         modifier = GlanceModifier
             .fillMaxSize()
+            .appWidgetBackground()
+            .background(GlanceTheme.colors.widgetBackground)
+            .cornerRadius(24.dp)
             .padding(12.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = GlanceModifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
+        // Status indicator
+        Row(
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Status indicator
-            Row(
-                modifier = GlanceModifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalAlignment = Alignment.Start
-            ) {
-                Image(
-                    provider = ImageProvider(iconRes),
-                    contentDescription = null,
-                    modifier = GlanceModifier.size(20.dp)
-                )
-                Spacer(modifier = GlanceModifier.size(4.dp))
-                Text(
-                    text = if (status.isOpen) "Open" else "Closed",
-                    style = TextStyle(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor
-                    )
-                )
-            }
-
-            Spacer(modifier = GlanceModifier.defaultWeight())
-
-            // Countdown
-            status.timeRemaining?.let { remaining ->
-                Text(
-                    text = remaining.toCompactCountdown(),
-                    style = TextStyle(
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = GlanceTheme.colors.onSurface
-                    )
-                )
-            }
-
-            // Label
-            val labelText = when {
-                status.isOpen -> "until ${status.currentPhase.displayName} ends"
-                status.nextPhase != null && status.nextPhase != MealPhase.CLOSED -> "until ${status.nextPhase.displayName}"
-                else -> "See you tomorrow!"
-            }
-
+            Image(
+                provider = ImageProvider(iconRes),
+                contentDescription = null,
+                modifier = GlanceModifier.size(16.dp)
+            )
+            Spacer(modifier = GlanceModifier.width(4.dp))
             Text(
-                text = labelText,
+                text = if (status.isOpen) "Open" else "Closed",
                 style = TextStyle(
-                    fontSize = 11.sp,
-                    color = GlanceTheme.colors.onSurfaceVariant
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = statusColor
                 )
             )
-
-            Spacer(modifier = GlanceModifier.defaultWeight())
         }
+
+        // Countdown
+        status.timeRemaining?.let { remaining ->
+            Text(
+                text = remaining.toCompactCountdown(),
+                style = TextStyle(
+                    fontSize = 52.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = GlanceTheme.colors.onSurface
+                )
+            )
+        }
+
+        // Label
+        val labelText = when {
+            status.isOpen -> "until ${status.currentPhase.displayName} ends"
+            status.nextPhase != null && status.nextPhase != MealPhase.CLOSED -> "until ${status.nextPhase.displayName}"
+            else -> "See you tomorrow!"
+        }
+
+        Text(
+            text = labelText,
+            style = TextStyle(
+                fontSize = 10.sp,
+                color = GlanceTheme.colors.onSurfaceVariant
+            )
+        )
     }
 }

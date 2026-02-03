@@ -7,13 +7,15 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
-import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
@@ -58,10 +60,13 @@ fun MediumWidgetContent(
     Row(
         modifier = GlanceModifier
             .fillMaxSize()
+            .appWidgetBackground()
+            .background(GlanceTheme.colors.widgetBackground)
+            .cornerRadius(24.dp)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left side - Status
+        // Left side - Status (half width)
         Column(
             modifier = GlanceModifier
                 .defaultWeight()
@@ -92,7 +97,7 @@ fun MediumWidgetContent(
                 Text(
                     text = remaining.toCompactCountdown(),
                     style = TextStyle(
-                        fontSize = 40.sp,
+                        fontSize = 48.sp,
                         fontWeight = FontWeight.Bold,
                         color = GlanceTheme.colors.onSurface
                     )
@@ -116,14 +121,6 @@ fun MediumWidgetContent(
             }
         }
 
-        // Divider
-        Spacer(
-            modifier = GlanceModifier
-                .width(1.dp)
-                .fillMaxHeight()
-                .padding(vertical = 8.dp)
-        )
-
         Spacer(modifier = GlanceModifier.width(12.dp))
 
         // Right side - Specials
@@ -131,35 +128,33 @@ fun MediumWidgetContent(
             modifier = GlanceModifier
                 .defaultWeight()
                 .fillMaxHeight(),
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = venueName,
                 style = TextStyle(
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = GlanceTheme.colors.onSurfaceVariant
                 )
             )
 
-            Spacer(modifier = GlanceModifier.height(4.dp))
+            Spacer(modifier = GlanceModifier.height(6.dp))
 
             if (specials.isEmpty()) {
-                Spacer(modifier = GlanceModifier.defaultWeight())
                 Text(
                     text = "No specials available",
                     style = TextStyle(
-                        fontSize = 11.sp,
+                        fontSize = 13.sp,
                         color = GlanceTheme.colors.onSurfaceVariant
                     )
                 )
-                Spacer(modifier = GlanceModifier.defaultWeight())
             } else {
                 specials.take(4).forEach { item ->
                     Text(
                         text = "\u2022 ${item.name}",
                         style = TextStyle(
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             color = GlanceTheme.colors.onSurface
                         ),
                         maxLines = 1

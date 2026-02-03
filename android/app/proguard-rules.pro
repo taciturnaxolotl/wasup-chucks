@@ -15,3 +15,9 @@
 # Retrofit
 -dontwarn retrofit2.**
 -keep class retrofit2.** { *; }
+
+# Widget receivers - keep these from being stripped
+-keep class com.wasupchucks.widget.** { *; }
+
+# Glance
+-keep class androidx.glance.** { *; }

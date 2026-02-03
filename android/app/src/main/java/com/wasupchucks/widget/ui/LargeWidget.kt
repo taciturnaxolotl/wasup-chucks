@@ -7,6 +7,9 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
@@ -58,6 +61,9 @@ fun LargeWidgetContent(
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
+            .appWidgetBackground()
+            .background(GlanceTheme.colors.widgetBackground)
+            .cornerRadius(24.dp)
             .padding(16.dp)
     ) {
         // Header row
@@ -130,15 +136,6 @@ fun LargeWidgetContent(
                 }
             }
         }
-
-        Spacer(modifier = GlanceModifier.height(12.dp))
-
-        // Divider simulation
-        Spacer(
-            modifier = GlanceModifier
-                .fillMaxWidth()
-                .height(1.dp)
-        )
 
         Spacer(modifier = GlanceModifier.height(12.dp))
 
