@@ -23,7 +23,7 @@ public struct MenuItem: Codable, Hashable, Identifiable, Sendable {
     public let name: String
     public let allergens: [Allergen]
 
-    public nonisolated var id: String { name }
+    public nonisolated var id: Int { hashValue }
 
     public init(name: String, allergens: [Allergen]) {
         self.name = name
@@ -37,7 +37,7 @@ public struct VenueMenu: Codable, Hashable, Identifiable, Sendable {
     public let slot: String
     public let items: [MenuItem]
 
-    public nonisolated var id: String { "\(venue)-\(slot)" }
+    public nonisolated var id: Int { hashValue }
 
     public init(venue: String, meal: String?, slot: String, items: [MenuItem]) {
         self.venue = venue
@@ -309,7 +309,7 @@ public actor ChucksService {
             throw ChucksError.invalidURL
         }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: url, timeoutInterval: 30)
         request.setValue("*/*", forHTTPHeaderField: "Accept")
         request.setValue("https://www.cedarville.edu", forHTTPHeaderField: "Origin")
         request.setValue("https://www.cedarville.edu/offices/the-commons", forHTTPHeaderField: "Referer")
