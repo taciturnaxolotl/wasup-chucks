@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wasup Chuck\'s</string>
+    <string name="widget_name_small">Chuck\'s Status</string>
+    <string name="widget_name_medium">Chuck\'s Status &amp; Specials</string>
+    <string name="widget_name_large">Chuck\'s Full Status</string>
+    <string name="widget_description">See current meal times and specials at Chuck\'s.</string>
+
+    <!-- Status -->
+    <string name="status_open">Open</string>
+    <string name="status_closed">Closed</string>
+    <string name="until_ends">until %1$s ends</string>
+    <string name="until_opens">until %1$s</string>
+    <string name="see_you_tomorrow">See you tomorrow!</string>
+
+    <!-- Meals -->
+    <string name="breakfast">Breakfast</string>
+    <string name="lunch">Lunch</string>
+    <string name="dinner">Dinner</string>
+
+    <!-- Sections -->
+    <string name="todays_schedule">Today\'s Schedule</string>
+    <string name="meal_specials">%1$s Specials</string>
+    <string name="always_available">Always Available</string>
+    <string name="no_specials">No specials available</string>
+    <string name="no_menu_available">No Menu Available</string>
+    <string name="no_menu_description">No specific menu items for %1$s today.</string>
+
+    <!-- Errors -->
+    <string name="error_title">Menu Unavailable</string>
+    <string name="error_network">Couldn\'t connect to the server. Check your internet connection.</string>
+    <string name="error_invalid_url">There was a problem with the request.</string>
+    <string name="error_decoding">The menu data couldn\'t be read.</string>
+    <string name="error_generic">Something went wrong loading the menu.</string>
+    <string name="try_again">Try Again</string>
+
+    <!-- Footer -->
+    <string name="made_with_love">Made with \u2665 by Kieran Klukas</string>
+    <string name="privacy_policy">Privacy Policy</string>
+    <string name="privacy_policy_url">https://dunkirk.sh/wasup-chucks/</string>
+
+    <!-- Accessibility -->
+    <string name="open_for_meal">Chuck\'s is currently open for %1$s</string>
+    <string name="closed_next_meal">Chuck\'s is closed. Next meal: %1$s</string>
+    <string name="meal_time_range">%1$s, %2$s to %3$s</string>
+    <string name="current_meal">current meal</string>
+    <string name="tap_to_view_menu">Tap to view menu</string>
+    <string name="contains_allergens">Contains: %1$s</string>
+</resources>

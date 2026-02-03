@@ -1,6 +1,6 @@
 # Wasup Chuck's
 
-ios widget showing what is available at chucks
+A mobile app showing what is available at Chuck's (Cedarville University dining hall). Available for iOS and Android with native widgets on both platforms.
 
 The canonical repo for this is hosted on tangled over at [`dunkirk.sh/wasup-chucks`](https://tangled.org/@dunkirk.sh/wasup-chucks)
 

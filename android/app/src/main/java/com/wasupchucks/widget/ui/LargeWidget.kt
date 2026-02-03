@@ -1,0 +1,190 @@
+package com.wasupchucks.widget.ui
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.glance.GlanceModifier
+import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
+import androidx.glance.layout.padding
+import androidx.glance.layout.size
+import androidx.glance.layout.width
+import androidx.glance.text.FontWeight
+import androidx.glance.text.Text
+import androidx.glance.text.TextAlign
+import androidx.glance.text.TextStyle
+import com.wasupchucks.R
+import com.wasupchucks.data.model.ChucksStatus
+import com.wasupchucks.data.model.MealPhase
+import com.wasupchucks.data.model.MenuItem
+import com.wasupchucks.data.model.toCompactCountdown
+
+@Composable
+fun LargeWidgetContent(
+    status: ChucksStatus,
+    specials: List<MenuItem>,
+    venueName: String
+) {
+    val statusColor = if (status.isOpen) {
+        GlanceTheme.colors.primary
+    } else {
+        GlanceTheme.colors.error
+    }
+
+    val iconRes = when {
+        status.isOpen -> when (status.currentPhase) {
+            MealPhase.BREAKFAST -> R.drawable.ic_breakfast
+            MealPhase.LUNCH -> R.drawable.ic_lunch
+            MealPhase.DINNER -> R.drawable.ic_dinner
+            MealPhase.CLOSED -> R.drawable.ic_closed
+        }
+        status.nextPhase != null -> when (status.nextPhase) {
+            MealPhase.BREAKFAST -> R.drawable.ic_breakfast
+            MealPhase.LUNCH -> R.drawable.ic_lunch
+            MealPhase.DINNER -> R.drawable.ic_dinner
+            MealPhase.CLOSED -> R.drawable.ic_closed
+        }
+        else -> R.drawable.ic_closed
+    }
+
+    Column(
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Header row
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Status info
+            Row(
+                modifier = GlanceModifier.defaultWeight(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    provider = ImageProvider(iconRes),
+                    contentDescription = null,
+                    modifier = GlanceModifier.size(28.dp)
+                )
+                Spacer(modifier = GlanceModifier.width(8.dp))
+                Column {
+                    Text(
+                        text = if (status.isOpen) "Open" else "Closed",
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
+                        )
+                    )
+                    val mealName = if (status.isOpen) {
+                        status.currentPhase.displayName
+                    } else {
+                        status.nextPhase?.displayName ?: ""
+                    }
+                    Text(
+                        text = mealName,
+                        style = TextStyle(
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GlanceTheme.colors.onSurface
+                        )
+                    )
+                }
+            }
+
+            // Countdown
+            status.timeRemaining?.let { remaining ->
+                Column(
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        text = remaining.toCompactCountdown(),
+                        style = TextStyle(
+                            fontSize = 44.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GlanceTheme.colors.onSurface,
+                            textAlign = TextAlign.End
+                        )
+                    )
+                    val labelText = when {
+                        status.isOpen -> "until ${status.currentPhase.displayName} ends"
+                        else -> "until open"
+                    }
+                    Text(
+                        text = labelText,
+                        style = TextStyle(
+                            fontSize = 11.sp,
+                            color = GlanceTheme.colors.onSurfaceVariant,
+                            textAlign = TextAlign.End
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = GlanceModifier.height(12.dp))
+
+        // Divider simulation
+        Spacer(
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .height(1.dp)
+        )
+
+        Spacer(modifier = GlanceModifier.height(12.dp))
+
+        // Specials section
+        Text(
+            text = venueName,
+            style = TextStyle(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = GlanceTheme.colors.onSurfaceVariant
+            )
+        )
+
+        Spacer(modifier = GlanceModifier.height(8.dp))
+
+        if (specials.isEmpty()) {
+            Spacer(modifier = GlanceModifier.defaultWeight())
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "No specials available",
+                    style = TextStyle(
+                        fontSize = 14.sp,
+                        color = GlanceTheme.colors.onSurfaceVariant
+                    )
+                )
+            }
+            Spacer(modifier = GlanceModifier.defaultWeight())
+        } else {
+            Column(
+                modifier = GlanceModifier.fillMaxWidth()
+            ) {
+                specials.take(6).forEach { item ->
+                    Text(
+                        text = "\u2022 ${item.name}",
+                        style = TextStyle(
+                            fontSize = 14.sp,
+                            color = GlanceTheme.colors.onSurface
+                        ),
+                        maxLines = 1
+                    )
+                    Spacer(modifier = GlanceModifier.height(4.dp))
+                }
+            }
+        }
+    }
+}
