@@ -62,6 +62,17 @@ struct ContentView: View {
                     } else {
                         CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth)
                     }
+
+                    // Footer
+                    VStack(spacing: 4) {
+                        Text("Made with \u{2665} by Kieran Klukas")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Link("Privacy Policy", destination: URL(string: "https://dunkirk.sh/wasup-chucks/")!)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.top, 16)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
