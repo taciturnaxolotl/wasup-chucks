@@ -87,6 +87,7 @@ struct ContentView: View {
                 await loadMenu()
             }
             .refreshable {
+                await ChucksService.shared.invalidateCache()
                 await loadMenu()
             }
             .sheet(item: $selectedMeal) { meal in

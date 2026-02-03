@@ -286,6 +286,54 @@ extension TimeInterval {
     }
 }
 
+// MARK: - Persistent Cache
+
+private enum MenuCacheIO: Sendable {
+    nonisolated static func load(from directory: URL) -> (menu: MenuResponse, cacheDate: Date)? {
+        let menuURL = directory.appendingPathComponent("menu_cache.json")
+        let metaURL = directory.appendingPathComponent("menu_cache_meta.plist")
+
+        guard FileManager.default.fileExists(atPath: menuURL.path),
+              FileManager.default.fileExists(atPath: metaURL.path) else { return nil }
+
+        do {
+            let menuData = try Data(contentsOf: menuURL)
+            let menu = try JSONDecoder().decode(MenuResponse.self, from: menuData)
+
+            let metaData = try Data(contentsOf: metaURL)
+            guard let meta = try PropertyListSerialization.propertyList(from: metaData, format: nil) as? [String: Any],
+                  let timestamp = meta["cacheTimestamp"] as? Date else { return nil }
+
+            return (menu, timestamp)
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated static func save(menu: MenuResponse, to directory: URL) {
+        let menuURL = directory.appendingPathComponent("menu_cache.json")
+        let metaURL = directory.appendingPathComponent("menu_cache_meta.plist")
+
+        do {
+            let menuData = try JSONEncoder().encode(menu)
+            try menuData.write(to: menuURL)
+
+            let meta: [String: Any] = ["cacheTimestamp": Date()]
+            let metaData = try PropertyListSerialization.data(fromPropertyList: meta, format: .binary, options: 0)
+            try metaData.write(to: metaURL)
+        } catch {
+            // Ignore save errors
+        }
+    }
+
+    nonisolated static func delete(from directory: URL) {
+        let menuURL = directory.appendingPathComponent("menu_cache.json")
+        let metaURL = directory.appendingPathComponent("menu_cache_meta.plist")
+        try? FileManager.default.removeItem(at: menuURL)
+        try? FileManager.default.removeItem(at: metaURL)
+    }
+}
+
 // MARK: - API Service
 
 public actor ChucksService {
@@ -294,15 +342,55 @@ public actor ChucksService {
     private let baseURL = "https://diningdata.cedarville.edu/api/menus"
     private var cachedMenu: MenuResponse?
     private var cacheDate: Date?
-    private let cacheExpiration: TimeInterval = 3600
+    private let cacheExpiration: TimeInterval = 12 * 60 * 60 // 12 hours
 
-    public init() {}
+    private static let appGroupID = "group.sh.dunkirk.wasup-chucks"
+
+    private var cacheDirectory: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupID)
+    }
+
+    public init() {
+        // Load persistent cache on init
+        Task { await loadPersistentCache() }
+    }
+
+    private func loadPersistentCache() {
+        guard let dir = cacheDirectory,
+              let cached = MenuCacheIO.load(from: dir) else { return }
+        self.cachedMenu = cached.menu
+        self.cacheDate = cached.cacheDate
+    }
+
+    private func savePersistentCache(menu: MenuResponse) {
+        guard let dir = cacheDirectory else { return }
+        MenuCacheIO.save(menu: menu, to: dir)
+    }
+
+    public func invalidateCache() {
+        cachedMenu = nil
+        cacheDate = nil
+        if let dir = cacheDirectory {
+            MenuCacheIO.delete(from: dir)
+        }
+    }
 
     public func fetchMenu(days: Int = 5) async throws -> MenuResponse {
+        // Check in-memory cache first
         if let cached = cachedMenu,
            let date = cacheDate,
            Date().timeIntervalSince(date) < cacheExpiration {
             return cached
+        }
+
+        // Check persistent cache
+        if cachedMenu == nil {
+            loadPersistentCache()
+            if let cached = cachedMenu,
+               let date = cacheDate,
+               Date().timeIntervalSince(date) < cacheExpiration {
+                return cached
+            }
         }
 
         guard let url = URL(string: "\(baseURL)?days=\(days)") else {
@@ -314,23 +402,38 @@ public actor ChucksService {
         request.setValue("https://www.cedarville.edu", forHTTPHeaderField: "Origin")
         request.setValue("https://www.cedarville.edu/offices/the-commons", forHTTPHeaderField: "Referer")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                // Return stale cache on network error if available
+                if let cached = cachedMenu {
+                    return cached
+                }
+                throw ChucksError.networkError
+            }
+
+            let menu: MenuResponse
+            do {
+                menu = try JSONDecoder().decode(MenuResponse.self, from: data)
+            } catch {
+                throw ChucksError.decodingError(underlying: error)
+            }
+            cachedMenu = menu
+            cacheDate = Date()
+            savePersistentCache(menu: menu)
+
+            return menu
+        } catch let error as ChucksError {
+            throw error
+        } catch {
+            // Return stale cache on network error if available
+            if let cached = cachedMenu {
+                return cached
+            }
             throw ChucksError.networkError
         }
-
-        let menu: MenuResponse
-        do {
-            menu = try JSONDecoder().decode(MenuResponse.self, from: data)
-        } catch {
-            throw ChucksError.decodingError(underlying: error)
-        }
-        cachedMenu = menu
-        cacheDate = Date()
-
-        return menu
     }
 
     public func getSpecials(for date: Date, phase: MealPhase) async throws -> [MenuItem] {
