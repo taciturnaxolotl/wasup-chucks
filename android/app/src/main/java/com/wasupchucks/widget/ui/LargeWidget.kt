@@ -3,6 +3,7 @@ package com.wasupchucks.widget.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
@@ -39,7 +40,7 @@ fun LargeWidgetContent(
     val statusColor = if (status.isOpen) {
         GlanceTheme.colors.primary
     } else {
-        GlanceTheme.colors.tertiary
+        GlanceTheme.colors.onSurfaceVariant
     }
 
     val iconRes = when {
@@ -79,14 +80,15 @@ fun LargeWidgetContent(
                 Image(
                     provider = ImageProvider(iconRes),
                     contentDescription = null,
-                    modifier = GlanceModifier.size(28.dp)
+                    modifier = GlanceModifier.size(32.dp),
+                    colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface)
                 )
-                Spacer(modifier = GlanceModifier.width(8.dp))
+                Spacer(modifier = GlanceModifier.width(10.dp))
                 Column {
                     Text(
                         text = if (status.isOpen) "Open" else "Closed",
                         style = TextStyle(
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = statusColor
                         )
@@ -99,7 +101,7 @@ fun LargeWidgetContent(
                     Text(
                         text = mealName,
                         style = TextStyle(
-                            fontSize = 18.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = GlanceTheme.colors.onSurface
                         )
@@ -115,7 +117,7 @@ fun LargeWidgetContent(
                     Text(
                         text = remaining.toCompactCountdown(),
                         style = TextStyle(
-                            fontSize = 44.sp,
+                            fontSize = 48.sp,
                             fontWeight = FontWeight.Bold,
                             color = GlanceTheme.colors.onSurface,
                             textAlign = TextAlign.End
@@ -128,7 +130,7 @@ fun LargeWidgetContent(
                     Text(
                         text = labelText,
                         style = TextStyle(
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             color = GlanceTheme.colors.onSurfaceVariant,
                             textAlign = TextAlign.End
                         )
@@ -137,19 +139,19 @@ fun LargeWidgetContent(
             }
         }
 
-        Spacer(modifier = GlanceModifier.height(12.dp))
+        Spacer(modifier = GlanceModifier.height(16.dp))
 
         // Specials section
         Text(
             text = venueName,
             style = TextStyle(
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = GlanceTheme.colors.onSurfaceVariant
             )
         )
 
-        Spacer(modifier = GlanceModifier.height(8.dp))
+        Spacer(modifier = GlanceModifier.height(10.dp))
 
         if (specials.isEmpty()) {
             Spacer(modifier = GlanceModifier.defaultWeight())
@@ -160,7 +162,7 @@ fun LargeWidgetContent(
                 Text(
                     text = "No specials available",
                     style = TextStyle(
-                        fontSize = 14.sp,
+                        fontSize = 16.sp,
                         color = GlanceTheme.colors.onSurfaceVariant
                     )
                 )
@@ -174,12 +176,12 @@ fun LargeWidgetContent(
                     Text(
                         text = "\u2022 ${item.name}",
                         style = TextStyle(
-                            fontSize = 14.sp,
+                            fontSize = 16.sp,
                             color = GlanceTheme.colors.onSurface
                         ),
                         maxLines = 1
                     )
-                    Spacer(modifier = GlanceModifier.height(4.dp))
+                    Spacer(modifier = GlanceModifier.height(6.dp))
                 }
             }
         }

@@ -64,10 +64,11 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         PullToRefreshBox(

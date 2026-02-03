@@ -3,6 +3,7 @@ package com.wasupchucks.widget.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
@@ -38,7 +39,7 @@ fun MediumWidgetContent(
     val statusColor = if (status.isOpen) {
         GlanceTheme.colors.primary
     } else {
-        GlanceTheme.colors.tertiary
+        GlanceTheme.colors.onSurfaceVariant
     }
 
     val iconRes = when {
@@ -80,13 +81,14 @@ fun MediumWidgetContent(
                 Image(
                     provider = ImageProvider(iconRes),
                     contentDescription = null,
-                    modifier = GlanceModifier.size(16.dp)
+                    modifier = GlanceModifier.size(20.dp),
+                    colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface)
                 )
-                Spacer(modifier = GlanceModifier.width(4.dp))
+                Spacer(modifier = GlanceModifier.width(6.dp))
                 Text(
                     text = if (status.isOpen) "Open" else "Closed",
                     style = TextStyle(
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = statusColor
                     )
@@ -97,7 +99,7 @@ fun MediumWidgetContent(
                 Text(
                     text = remaining.toCompactCountdown(),
                     style = TextStyle(
-                        fontSize = 48.sp,
+                        fontSize = 52.sp,
                         fontWeight = FontWeight.Bold,
                         color = GlanceTheme.colors.onSurface
                     )
@@ -114,7 +116,7 @@ fun MediumWidgetContent(
                 Text(
                     text = labelText,
                     style = TextStyle(
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                         color = GlanceTheme.colors.onSurfaceVariant
                     )
                 )
@@ -133,19 +135,19 @@ fun MediumWidgetContent(
             Text(
                 text = venueName,
                 style = TextStyle(
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = GlanceTheme.colors.onSurfaceVariant
                 )
             )
 
-            Spacer(modifier = GlanceModifier.height(6.dp))
+            Spacer(modifier = GlanceModifier.height(8.dp))
 
             if (specials.isEmpty()) {
                 Text(
                     text = "No specials available",
                     style = TextStyle(
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         color = GlanceTheme.colors.onSurfaceVariant
                     )
                 )
@@ -154,7 +156,7 @@ fun MediumWidgetContent(
                     Text(
                         text = "\u2022 ${item.name}",
                         style = TextStyle(
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             color = GlanceTheme.colors.onSurface
                         ),
                         maxLines = 1

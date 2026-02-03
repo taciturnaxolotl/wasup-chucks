@@ -3,6 +3,7 @@ package com.wasupchucks.widget.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
@@ -31,7 +32,7 @@ fun SmallWidgetContent(status: ChucksStatus) {
     val statusColor = if (status.isOpen) {
         GlanceTheme.colors.primary
     } else {
-        GlanceTheme.colors.tertiary
+        GlanceTheme.colors.onSurfaceVariant
     }
 
     val iconRes = when {
@@ -67,13 +68,14 @@ fun SmallWidgetContent(status: ChucksStatus) {
             Image(
                 provider = ImageProvider(iconRes),
                 contentDescription = null,
-                modifier = GlanceModifier.size(16.dp)
+                modifier = GlanceModifier.size(20.dp),
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface)
             )
-            Spacer(modifier = GlanceModifier.width(4.dp))
+            Spacer(modifier = GlanceModifier.width(6.dp))
             Text(
                 text = if (status.isOpen) "Open" else "Closed",
                 style = TextStyle(
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = statusColor
                 )
@@ -85,7 +87,7 @@ fun SmallWidgetContent(status: ChucksStatus) {
             Text(
                 text = remaining.toCompactCountdown(),
                 style = TextStyle(
-                    fontSize = 52.sp,
+                    fontSize = 56.sp,
                     fontWeight = FontWeight.Bold,
                     color = GlanceTheme.colors.onSurface
                 )
@@ -102,7 +104,7 @@ fun SmallWidgetContent(status: ChucksStatus) {
         Text(
             text = labelText,
             style = TextStyle(
-                fontSize = 10.sp,
+                fontSize = 12.sp,
                 color = GlanceTheme.colors.onSurfaceVariant
             )
         )
