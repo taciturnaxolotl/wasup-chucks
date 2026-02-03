@@ -14,24 +14,34 @@ import javax.inject.Singleton
 
 @Singleton
 class MenuRepositoryImpl @Inject constructor(
-    private val apiService: ChucksApiService
+    private val apiService: ChucksApiService,
+    private val menuCache: MenuCache
 ) : MenuRepository {
 
     private val mutex = Mutex()
     private var cachedMenu: Map<String, List<VenueMenu>>? = null
     private var cacheTime: Long = 0
-    private val cacheExpiration = 60 * 60 * 1000L // 1 hour in milliseconds
+    private val cacheExpiration = 12 * 60 * 60 * 1000L // 12 hours in milliseconds
 
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         .withZone(ZoneId.of("America/New_York"))
 
     override suspend fun fetchMenu(): Result<Map<String, List<VenueMenu>>> {
         return mutex.withLock {
-            // Check cache
             val currentTime = System.currentTimeMillis()
-            val cached = cachedMenu
-            if (cached != null && currentTime - cacheTime < cacheExpiration) {
-                return@withLock Result.success(cached)
+
+            // Check in-memory cache first
+            val memCached = cachedMenu
+            if (memCached != null && currentTime - cacheTime < cacheExpiration) {
+                return@withLock Result.success(memCached)
+            }
+
+            // Check persistent cache
+            val diskCached = menuCache.load()
+            if (diskCached != null && currentTime - diskCached.cacheTime < cacheExpiration) {
+                cachedMenu = diskCached.menu
+                cacheTime = diskCached.cacheTime
+                return@withLock Result.success(diskCached.menu)
             }
 
             // Fetch from API
@@ -39,10 +49,14 @@ class MenuRepositoryImpl @Inject constructor(
                 val menu = apiService.fetchMenu()
                 cachedMenu = menu
                 cacheTime = currentTime
+                menuCache.save(menu)
                 Result.success(menu)
             } catch (e: retrofit2.HttpException) {
+                // Return stale cache if available on network error
+                diskCached?.menu?.let { return@withLock Result.success(it) }
                 Result.failure(ChucksError.NetworkError)
             } catch (e: java.io.IOException) {
+                diskCached?.menu?.let { return@withLock Result.success(it) }
                 Result.failure(ChucksError.NetworkError)
             } catch (e: com.squareup.moshi.JsonDataException) {
                 Result.failure(ChucksError.DecodingError(e))
@@ -78,8 +92,11 @@ class MenuRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun invalidateCache() {
-        cachedMenu = null
-        cacheTime = 0
+    override suspend fun invalidateCache() {
+        mutex.withLock {
+            cachedMenu = null
+            cacheTime = 0
+            menuCache.clear()
+        }
     }
 }

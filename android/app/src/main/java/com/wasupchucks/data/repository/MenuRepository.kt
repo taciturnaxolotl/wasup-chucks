@@ -10,7 +10,7 @@ interface MenuRepository {
     suspend fun getMenuForDate(date: LocalDate): Result<List<VenueMenu>>
     suspend fun getSpecials(date: LocalDate, phase: MealPhase): Result<List<MenuItem>>
     suspend fun getSpecialsWithVenue(date: LocalDate, phase: MealPhase): Result<Pair<List<MenuItem>, String>>
-    fun invalidateCache()
+    suspend fun invalidateCache()
 }
 
 sealed class ChucksError : Exception() {

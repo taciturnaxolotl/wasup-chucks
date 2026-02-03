@@ -1,16 +1,20 @@
 package com.wasupchucks.di
 
+import android.content.Context
 import com.squareup.moshi.Moshi
 import com.wasupchucks.data.api.ChucksApiInterceptor
 import com.wasupchucks.data.api.ChucksApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
+import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -20,6 +24,7 @@ object NetworkModule {
 
     private const val BASE_URL = "https://diningdata.cedarville.edu/api/"
     private const val TIMEOUT_SECONDS = 30L
+    private const val CACHE_SIZE_BYTES = 10L * 1024 * 1024 // 10 MB
 
     @Provides
     @Singleton
@@ -30,10 +35,19 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideHttpCache(@ApplicationContext context: Context): Cache {
+        val cacheDir = File(context.cacheDir, "http_cache")
+        return Cache(cacheDir, CACHE_SIZE_BYTES)
+    }
+
+    @Provides
+    @Singleton
     fun provideOkHttpClient(
-        chucksApiInterceptor: ChucksApiInterceptor
+        chucksApiInterceptor: ChucksApiInterceptor,
+        cache: Cache
     ): OkHttpClient {
         return OkHttpClient.Builder()
+            .cache(cache)
             .addInterceptor(chucksApiInterceptor)
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BASIC
