@@ -13,7 +13,7 @@ public struct Allergen: Codable, Hashable, Sendable {
     public let url: String
     public let alt: String
 
-    public init(url: String, alt: String) {
+    public nonisolated init(url: String, alt: String) {
         self.url = url
         self.alt = alt
     }
@@ -23,9 +23,9 @@ public struct MenuItem: Codable, Hashable, Identifiable, Sendable {
     public let name: String
     public let allergens: [Allergen]
 
-    public nonisolated var id: Int { hashValue }
+    public nonisolated var id: String { "\(name)-\(allergens.map { $0.alt }.joined())" }
 
-    public init(name: String, allergens: [Allergen]) {
+    public nonisolated init(name: String, allergens: [Allergen]) {
         self.name = name
         self.allergens = allergens
     }
@@ -37,9 +37,9 @@ public struct VenueMenu: Codable, Hashable, Identifiable, Sendable {
     public let slot: String
     public let items: [MenuItem]
 
-    public nonisolated var id: Int { hashValue }
+    public nonisolated var id: String { "\(venue)-\(slot)-\(meal ?? "")" }
 
-    public init(venue: String, meal: String?, slot: String, items: [MenuItem]) {
+    public nonisolated init(venue: String, meal: String?, slot: String, items: [MenuItem]) {
         self.venue = venue
         self.meal = meal
         self.slot = slot
@@ -98,7 +98,7 @@ public struct MealSchedule: Identifiable, Sendable {
     public nonisolated var startMinutes: Int { startHour * 60 + startMinute }
     public nonisolated var endMinutes: Int { endHour * 60 + endMinute }
 
-    public init(phase: MealPhase, startHour: Int, startMinute: Int, endHour: Int, endMinute: Int) {
+    public nonisolated init(phase: MealPhase, startHour: Int, startMinute: Int, endHour: Int, endMinute: Int) {
         self.phase = phase
         self.startHour = startHour
         self.startMinute = startMinute
@@ -108,21 +108,21 @@ public struct MealSchedule: Identifiable, Sendable {
 
     // Mon-Fri: Hot Breakfast 7-8:15, Continental 8:15-9:30, Lunch 10:30-2:30, Dinner 4:30-7:30
     // Treating Hot + Continental as one "Breakfast" period for simplicity
-    public static let weekdaySchedule: [MealSchedule] = [
+    public nonisolated static let weekdaySchedule: [MealSchedule] = [
         MealSchedule(phase: .breakfast, startHour: 7, startMinute: 0, endHour: 9, endMinute: 30),
         MealSchedule(phase: .lunch, startHour: 10, startMinute: 30, endHour: 14, endMinute: 30),
         MealSchedule(phase: .dinner, startHour: 16, startMinute: 30, endHour: 19, endMinute: 30)
     ]
 
     // Saturday: Continental 8-9, Lunch 11-1, Dinner 4:30-6:30
-    public static let saturdaySchedule: [MealSchedule] = [
+    public nonisolated static let saturdaySchedule: [MealSchedule] = [
         MealSchedule(phase: .breakfast, startHour: 8, startMinute: 0, endHour: 9, endMinute: 0),
         MealSchedule(phase: .lunch, startHour: 11, startMinute: 0, endHour: 13, endMinute: 0),
         MealSchedule(phase: .dinner, startHour: 16, startMinute: 30, endHour: 18, endMinute: 30)
     ]
 
     // Sunday: Hot Breakfast 8-9, Lunch 11:30-2, Dinner 5-7:30
-    public static let sundaySchedule: [MealSchedule] = [
+    public nonisolated static let sundaySchedule: [MealSchedule] = [
         MealSchedule(phase: .breakfast, startHour: 8, startMinute: 0, endHour: 9, endMinute: 0),
         MealSchedule(phase: .lunch, startHour: 11, startMinute: 30, endHour: 14, endMinute: 0),
         MealSchedule(phase: .dinner, startHour: 17, startMinute: 0, endHour: 19, endMinute: 30)
@@ -157,7 +157,7 @@ public struct ChucksStatus: Sendable {
     public let isOpen: Bool
     public let currentMealEnd: Date?
 
-    public init(currentPhase: MealPhase, timeRemaining: TimeInterval?, nextPhase: MealPhase?, nextPhaseStart: Date?, isOpen: Bool, currentMealEnd: Date?) {
+    public nonisolated init(currentPhase: MealPhase, timeRemaining: TimeInterval?, nextPhase: MealPhase?, nextPhaseStart: Date?, isOpen: Bool, currentMealEnd: Date?) {
         self.currentPhase = currentPhase
         self.timeRemaining = timeRemaining
         self.nextPhase = nextPhase
