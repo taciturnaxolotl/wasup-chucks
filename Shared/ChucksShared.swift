@@ -325,7 +325,7 @@ public actor ChucksService {
         do {
             menu = try JSONDecoder().decode(MenuResponse.self, from: data)
         } catch {
-            throw ChucksError.decodingError
+            throw ChucksError.decodingError(underlying: error)
         }
         cachedMenu = menu
         cacheDate = Date()
@@ -359,7 +359,7 @@ public actor ChucksService {
 public enum ChucksError: Error, LocalizedError, Sendable {
     case invalidURL
     case networkError
-    case decodingError
+    case decodingError(underlying: Error)
 
     public nonisolated var errorDescription: String? {
         switch self {
@@ -367,8 +367,8 @@ public enum ChucksError: Error, LocalizedError, Sendable {
             return "Invalid URL"
         case .networkError:
             return "Network error"
-        case .decodingError:
-            return "Failed to parse menu data"
+        case .decodingError(let underlying):
+            return "Failed to parse menu data: \(underlying.localizedDescription)"
         }
     }
 }

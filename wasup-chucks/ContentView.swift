@@ -566,6 +566,6 @@ struct AllergenBadge: View {
 }
 
 #Preview("Error - Decoding") {
-    ErrorCard(error: ChucksError.decodingError) {}
+    ErrorCard(error: ChucksError.decodingError(underlying: NSError(domain: "Preview", code: 0, userInfo: [NSLocalizedDescriptionKey: "Sample decoding error"]))) {}
         .padding()
 }
