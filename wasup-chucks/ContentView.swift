@@ -207,7 +207,7 @@ struct ScheduleCard: View {
     @Binding var selectedMeal: MealSchedule?
     
     var schedule: [MealSchedule] {
-        MealSchedule.schedule(for: Calendar.current.component(.weekday, from: Date()))
+        MealSchedule.schedule(for: CedarvilleTime.calendar.component(.weekday, from: Date()))
     }
     
     var body: some View {

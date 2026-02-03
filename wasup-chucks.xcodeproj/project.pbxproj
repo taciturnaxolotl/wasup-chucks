@@ -67,6 +67,11 @@
 			path = widget;
 			sourceTree = "<group>";
 		};
+		0BSHARED12F2D500000AF0585 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +99,7 @@
 			children = (
 				0BBF201F2F2D443D00AF0585 /* wasup-chucks */,
 				0BBF203B2F2D46AF00AF0585 /* widget */,
+				0BSHARED12F2D500000AF0585 /* Shared */,
 				0BBF20362F2D46AF00AF0585 /* Frameworks */,
 				0BBF201E2F2D443D00AF0585 /* Products */,
 			);
@@ -136,6 +142,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				0BBF201F2F2D443D00AF0585 /* wasup-chucks */,
+				0BSHARED12F2D500000AF0585 /* Shared */,
 			);
 			name = "wasup-chucks";
 			packageProductDependencies = (
@@ -158,6 +165,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				0BBF203B2F2D46AF00AF0585 /* widget */,
+				0BSHARED12F2D500000AF0585 /* Shared */,
 			);
 			name = widgetExtension;
 			packageProductDependencies = (
