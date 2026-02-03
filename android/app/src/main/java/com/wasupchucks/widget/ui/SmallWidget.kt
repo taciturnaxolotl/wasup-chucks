@@ -31,7 +31,7 @@ fun SmallWidgetContent(status: ChucksStatus) {
     val statusColor = if (status.isOpen) {
         GlanceTheme.colors.primary
     } else {
-        GlanceTheme.colors.error
+        GlanceTheme.colors.tertiary
     }
 
     val iconRes = when {

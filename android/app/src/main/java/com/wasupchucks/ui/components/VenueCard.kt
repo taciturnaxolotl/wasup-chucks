@@ -1,6 +1,8 @@
 package com.wasupchucks.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,19 +13,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,7 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.wasupchucks.data.model.VenueMenu
-import com.wasupchucks.ui.theme.StatusClosed
 
 @Composable
 fun VenueCard(
@@ -47,13 +45,14 @@ fun VenueCard(
 ) {
     var isExpanded by rememberSaveable { mutableStateOf(true) }
 
-    ElevatedCard(
-        modifier = modifier.fillMaxWidth()
+    OutlinedCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(MaterialTheme.shapes.medium)
         ) {
             // Header
             Row(
@@ -66,28 +65,39 @@ fun VenueCard(
             ) {
                 Text(
                     text = venue.venue,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = StatusClosed
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Icon(
                     imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = StatusClosed
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
             // Content
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                enter = fadeIn(
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                ) + expandVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ),
+                exit = fadeOut(
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                ) + shrinkVertically(
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     venue.items.forEach { item ->
                         Row(
@@ -95,21 +105,21 @@ fun VenueCard(
                                 .fillMaxWidth()
                                 .semantics { contentDescription = item.name },
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             // Bullet point
                             Box(
                                 modifier = Modifier
-                                    .size(4.dp)
+                                    .size(6.dp)
                                     .background(
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                                         CircleShape
                                     )
                             )
 
                             Text(
                                 text = item.name,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f)
                             )
 

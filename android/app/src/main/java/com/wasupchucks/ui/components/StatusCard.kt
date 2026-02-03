@@ -1,6 +1,8 @@
 package com.wasupchucks.ui.components
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,7 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,15 +28,14 @@ import com.wasupchucks.data.model.ChucksStatus
 import com.wasupchucks.data.model.MealPhase
 import com.wasupchucks.data.model.toExpandedCountdown
 import com.wasupchucks.ui.theme.CountdownTypography
-import com.wasupchucks.ui.theme.StatusClosed
-import com.wasupchucks.ui.theme.StatusOpen
-
 @Composable
 fun StatusCard(
     status: ChucksStatus,
     modifier: Modifier = Modifier
 ) {
-    val statusColor = if (status.isOpen) StatusOpen else StatusClosed
+    val colorScheme = MaterialTheme.colorScheme
+    val statusColor = if (status.isOpen) colorScheme.primary else colorScheme.tertiary
+
     val statusIcon = if (status.isOpen) {
         status.currentPhase.icon
     } else {
@@ -56,21 +58,30 @@ fun StatusCard(
         stringResource(R.string.closed_next_meal, status.nextPhase?.displayName ?: "")
     }
 
-    ElevatedCard(
-        modifier = modifier.fillMaxWidth()
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = colorScheme.surfaceContainerHigh
+        ),
+        shape = MaterialTheme.shapes.large
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
-                .animateContentSize()
+                .padding(24.dp)
+                .animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                )
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics { contentDescription = accessibilityLabel },
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(
                     imageVector = statusIcon,
@@ -80,20 +91,20 @@ fun StatusCard(
                 Column {
                     Text(
                         text = statusText,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = statusColor
                     )
                     Text(
                         text = mealText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onSurfaceVariant
                     )
                 }
             }
 
             status.timeRemaining?.let { remaining ->
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
                     text = remaining.toExpandedCountdown(),
@@ -110,8 +121,8 @@ fun StatusCard(
 
                 Text(
                     text = untilText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
             }

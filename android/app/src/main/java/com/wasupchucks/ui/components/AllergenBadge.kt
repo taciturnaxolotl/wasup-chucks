@@ -3,7 +3,7 @@ package com.wasupchucks.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,30 +16,35 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wasupchucks.R
 import com.wasupchucks.data.model.Allergen
-import com.wasupchucks.ui.theme.AllergenDietary
-import com.wasupchucks.ui.theme.AllergenDietaryContainer
-import com.wasupchucks.ui.theme.AllergenWarning
-import com.wasupchucks.ui.theme.AllergenWarningContainer
 
 @Composable
 fun AllergenBadge(
     allergen: Allergen,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = if (allergen.isDietary) AllergenDietaryContainer else AllergenWarningContainer
-    val textColor = if (allergen.isDietary) AllergenDietary else AllergenWarning
+    // Dietary badges use primary colors, warning badges use tertiary
+    val backgroundColor = if (allergen.isDietary) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.tertiaryContainer
+    }
+    val textColor = if (allergen.isDietary) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    }
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(4.dp),
+        shape = MaterialTheme.shapes.extraSmall,
         color = backgroundColor
     ) {
         Text(
             text = allergen.symbol,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = textColor,
-            modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp)
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
         )
     }
 }

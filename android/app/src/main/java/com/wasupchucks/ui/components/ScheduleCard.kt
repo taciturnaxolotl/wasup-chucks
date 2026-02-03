@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import com.wasupchucks.R
 import com.wasupchucks.data.model.ChucksStatus
 import com.wasupchucks.data.model.MealSchedule
-import com.wasupchucks.ui.theme.StatusOpen
 
 @Composable
 fun ScheduleCard(
@@ -36,25 +35,30 @@ fun ScheduleCard(
     onMealClick: (MealSchedule) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ElevatedCard(
-        modifier = modifier.fillMaxWidth()
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        shape = MaterialTheme.shapes.large
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
             Text(
                 text = stringResource(R.string.todays_schedule),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 schedule.forEach { meal ->
                     val isCurrent = status.isOpen && status.currentPhase == meal.phase
@@ -87,19 +91,19 @@ private fun ScheduleButton(
         endTime
     ) + if (isCurrent) ", ${stringResource(R.string.current_meal)}" else ""
 
-    val shape = RoundedCornerShape(12.dp)
+    val shape = MaterialTheme.shapes.medium
     val backgroundColor = if (isCurrent) {
-        StatusOpen.copy(alpha = 0.12f)
+        MaterialTheme.colorScheme.primaryContainer
     } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val contentColor = if (isCurrent) {
-        StatusOpen
+        MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.onSurface
     }
     val border = if (isCurrent) {
-        BorderStroke(2.dp, StatusOpen)
+        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
     } else {
         null
     }
@@ -130,9 +134,10 @@ private fun ScheduleButton(
                 color = contentColor
             )
             Text(
-                text = "$startTime-$endTime",
+                text = "$startTime–$endTime",
                 style = MaterialTheme.typography.labelSmall,
-                color = if (isCurrent) contentColor.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                color = contentColor.copy(alpha = 0.7f),
+                maxLines = 1
             )
         }
     }
