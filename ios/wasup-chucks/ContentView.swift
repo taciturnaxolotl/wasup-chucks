@@ -13,13 +13,16 @@ internal import Combine
 struct ContentView: View {
     @State private var status = ChucksStatus.calculate()
     @State private var todayMenu: [VenueMenu] = []
+    @State private var allMenus: MenuResponse = [:]
+    @State private var selectedDateIndex: Int = 0
+    @State private var selectedFutureMeal: MealPhase = .breakfast
     @State private var isLoading = true
     @State private var loadError: Error? = nil
     @State private var selectedMeal: MealSchedule? = nil
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    
+
     var currentSlot: String {
         if status.isOpen {
             return status.currentPhase.apiSlot
@@ -28,39 +31,99 @@ struct ContentView: View {
         }
         return "lunch"
     }
-    
+
     private var isRegularWidth: Bool {
         horizontalSizeClass == .regular
+    }
+
+    var availableDates: [String] {
+        allMenus.keys.sorted()
+    }
+
+    var isViewingToday: Bool {
+        selectedDateIndex == 0
+    }
+
+    var selectedDateMenu: [VenueMenu] {
+        guard selectedDateIndex < availableDates.count else { return [] }
+        return allMenus[availableDates[selectedDateIndex]] ?? []
+    }
+
+    var selectedDateSchedule: [MealSchedule] {
+        guard selectedDateIndex < availableDates.count else { return [] }
+        let dateKey = availableDates[selectedDateIndex]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        guard let date = formatter.date(from: dateKey) else { return [] }
+        let weekday = CedarvilleTime.calendar.component(.weekday, from: date)
+        return MealSchedule.schedule(for: weekday)
+    }
+
+    var futureMealVenues: [VenueMenu] {
+        selectedDateMenu.filter { $0.slot == selectedFutureMeal.apiSlot }
+            .sorted { $0.venue < $1.venue }
+    }
+
+    var futureAlwaysAvailable: [VenueMenu] {
+        selectedDateMenu.filter { $0.slot == "anytime" }
+            .sorted { $0.venue < $1.venue }
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    if isRegularWidth {
-                        // iPad: Two-column layout for top cards
-                        HStack(spacing: 16) {
-                            StatusCard(status: status)
-                                .frame(maxHeight: .infinity, alignment: .top)
-                            ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
-                                .frame(maxHeight: .infinity, alignment: .top)
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        // iPhone: Stacked layout
-                        StatusCard(status: status)
-                        ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+                    if availableDates.count > 1 {
+                        DateNavigationHeader(
+                            selectedDateIndex: $selectedDateIndex,
+                            selectedFutureMeal: $selectedFutureMeal,
+                            availableDates: availableDates
+                        )
                     }
 
-                    if isLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, minHeight: 200)
-                    } else if let error = loadError {
-                        ErrorCard(error: error) {
-                            Task { await loadMenu() }
+                    if isViewingToday {
+                        // Today's view
+                        if isRegularWidth {
+                            HStack(spacing: 16) {
+                                StatusCard(status: status)
+                                    .frame(maxHeight: .infinity, alignment: .top)
+                                ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+                                    .frame(maxHeight: .infinity, alignment: .top)
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            StatusCard(status: status)
+                            ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+                        }
+
+                        if isLoading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity, minHeight: 200)
+                        } else if let error = loadError {
+                            ErrorCard(error: error) {
+                                Task { await loadMenu() }
+                            }
+                        } else {
+                            CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth)
                         }
                     } else {
-                        CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth)
+                        // Future day view
+                        ScheduleCard(
+                            schedule: selectedDateSchedule,
+                            selectedMealPhase: $selectedFutureMeal
+                        )
+
+                        if isLoading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity, minHeight: 200)
+                        } else if let error = loadError {
+                            ErrorCard(error: error) {
+                                Task { await loadMenu() }
+                            }
+                        } else {
+                            CurrentMealView(menu: selectedDateMenu, slot: selectedFutureMeal.apiSlot, isOpen: true, isRegularWidth: isRegularWidth)
+                        }
                     }
 
                     // Footer
@@ -87,6 +150,7 @@ struct ContentView: View {
                 await loadMenu()
             }
             .refreshable {
+                selectedDateIndex = 0
                 await ChucksService.shared.invalidateCache()
                 await loadMenu()
             }
@@ -95,12 +159,13 @@ struct ContentView: View {
             }
         }
     }
-    
+
     func loadMenu() async {
         isLoading = true
         loadError = nil
         do {
             let menu = try await ChucksService.shared.fetchMenu()
+            allMenus = menu
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
             dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
@@ -111,6 +176,63 @@ struct ContentView: View {
             print("Failed to load menu: \(error)")
         }
         isLoading = false
+    }
+}
+
+// MARK: - Date Navigation Header
+
+struct DateNavigationHeader: View {
+    @Binding var selectedDateIndex: Int
+    @Binding var selectedFutureMeal: MealPhase
+    let availableDates: [String]
+
+    private func dateLabel(for index: Int) -> String {
+        guard index < availableDates.count else { return "" }
+        if index == 0 { return "Today" }
+        if index == 1 { return "Tomorrow" }
+        let dateKey = availableDates[index]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        guard let date = formatter.date(from: dateKey) else { return dateKey }
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateFormat = "EEEE, MMM d"
+        displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+        return displayFormatter.string(from: date)
+    }
+
+    var body: some View {
+        HStack {
+            Button {
+                selectedDateIndex -= 1
+                selectedFutureMeal = .breakfast
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+            }
+            .disabled(selectedDateIndex <= 0)
+            .modifier(LiquidGlassButtonModifier())
+
+            Spacer()
+
+            Text(dateLabel(for: selectedDateIndex))
+                .font(.headline)
+                .animation(.easeInOut, value: selectedDateIndex)
+
+            Spacer()
+
+            Button {
+                selectedDateIndex += 1
+                selectedFutureMeal = .breakfast
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.title3.weight(.semibold))
+            }
+            .disabled(selectedDateIndex >= availableDates.count - 1)
+            .modifier(LiquidGlassButtonModifier())
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
     }
 }
 
@@ -214,26 +336,52 @@ struct ErrorCard: View {
 // MARK: - Schedule Card
 
 struct ScheduleCard: View {
-    let status: ChucksStatus
-    let todayMenu: [VenueMenu]
+    let title: String
+    let schedule: [MealSchedule]
+    let status: ChucksStatus?
     @Binding var selectedMeal: MealSchedule?
-    
-    var schedule: [MealSchedule] {
-        MealSchedule.schedule(for: CedarvilleTime.calendar.component(.weekday, from: Date()))
+    var selectedMealPhase: Binding<MealPhase>?
+
+    /// Today mode: shows schedule with sheet on tap
+    init(status: ChucksStatus, todayMenu: [VenueMenu], selectedMeal: Binding<MealSchedule?>) {
+        self.title = "Today's Schedule"
+        self.schedule = MealSchedule.schedule(for: CedarvilleTime.calendar.component(.weekday, from: Date()))
+        self.status = status
+        self._selectedMeal = selectedMeal
+        self.selectedMealPhase = nil
     }
-    
+
+    /// Future day mode: shows schedule with tab selection
+    init(schedule: [MealSchedule], selectedMealPhase: Binding<MealPhase>) {
+        self.title = "Schedule"
+        self.schedule = schedule
+        self.status = nil
+        self._selectedMeal = .constant(nil)
+        self.selectedMealPhase = selectedMealPhase
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Today's Schedule")
+            Text(title)
                 .font(.headline)
-            
+
             HStack(spacing: 8) {
                 ForEach(schedule, id: \.phase) { meal in
-                    ScheduleButton(
-                        meal: meal,
-                        isCurrent: status.isOpen && status.currentPhase == meal.phase
-                    ) {
-                        selectedMeal = meal
+                    if let binding = selectedMealPhase {
+                        ScheduleButton(
+                            meal: meal,
+                            isCurrent: false,
+                            isSelected: binding.wrappedValue == meal.phase
+                        ) {
+                            binding.wrappedValue = meal.phase
+                        }
+                    } else {
+                        ScheduleButton(
+                            meal: meal,
+                            isCurrent: status?.isOpen == true && status?.currentPhase == meal.phase
+                        ) {
+                            selectedMeal = meal
+                        }
                     }
                 }
             }
@@ -248,37 +396,46 @@ struct ScheduleCard: View {
 struct ScheduleButton: View {
     let meal: MealSchedule
     let isCurrent: Bool
+    var isSelected: Bool = false
     let action: () -> Void
-    
+
+    private var isHighlighted: Bool {
+        isCurrent || isSelected
+    }
+
+    private var highlightColor: Color {
+        isSelected ? .orange : .green
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: meal.phase.icon)
                     .font(.title3)
                     .accessibilityHidden(true)
-                
+
                 Text(meal.phase.shortName)
                     .font(.caption.weight(.medium))
-                
+
                 Text("\(formatTime(meal.startHour, meal.startMinute))-\(formatTime(meal.endHour, meal.endMinute))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(isCurrent ? Color.green.opacity(0.15) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+            .background(isHighlighted ? highlightColor.opacity(0.15) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isCurrent ? Color.green : Color.clear, lineWidth: 2)
+                    .stroke(isHighlighted ? highlightColor : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isCurrent ? .green : .primary)
+        .foregroundStyle(isHighlighted ? highlightColor : .primary)
         .selectionHaptic(trigger: meal.phase)
-        .accessibilityLabel("\(meal.phase.shortName), \(formatTime(meal.startHour, meal.startMinute)) to \(formatTime(meal.endHour, meal.endMinute))\(isCurrent ? ", current meal" : "")")
+        .accessibilityLabel("\(meal.phase.shortName), \(formatTime(meal.startHour, meal.startMinute)) to \(formatTime(meal.endHour, meal.endMinute))\(isCurrent ? ", current meal" : "")\(isSelected ? ", selected" : "")")
         .accessibilityHint("Double tap to view menu")
     }
-    
+
     func formatTime(_ hour: Int, _ minute: Int) -> String {
         let period = hour >= 12 ? "PM" : "AM"
         let displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour)
@@ -578,6 +735,18 @@ struct AllergenBadge: View {
             .padding(.vertical, 3)
             .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Liquid Glass Button
+
+struct LiquidGlassButtonModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.buttonStyle(.glass)
+        } else {
+            content.buttonStyle(.bordered)
+        }
     }
 }
 

@@ -48,6 +48,10 @@ data class MealSchedule(
             }
         }
 
+        fun scheduleFor(date: LocalDate): List<MealSchedule> {
+            return scheduleFor(date.dayOfWeek)
+        }
+
         fun scheduleForToday(): List<MealSchedule> {
             val cedarvilleZone = ZoneId.of("America/New_York")
             val today = LocalDate.now(cedarvilleZone)

@@ -26,15 +26,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.wasupchucks.R
 import com.wasupchucks.data.model.ChucksStatus
+import com.wasupchucks.data.model.MealPhase
 import com.wasupchucks.data.model.MealSchedule
 
 @Composable
 fun ScheduleCard(
-    status: ChucksStatus,
     schedule: List<MealSchedule>,
     onMealClick: (MealSchedule) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    status: ChucksStatus? = null,
+    title: String? = null,
+    selectedPhase: MealPhase? = null,
+    onMealSelect: ((MealPhase) -> Unit)? = null
 ) {
+    val isTabMode = selectedPhase != null
+
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -48,7 +54,7 @@ fun ScheduleCard(
                 .padding(20.dp)
         ) {
             Text(
-                text = stringResource(R.string.todays_schedule),
+                text = title ?: stringResource(R.string.todays_schedule),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -61,12 +67,22 @@ fun ScheduleCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 schedule.forEach { meal ->
-                    val isCurrent = status.isOpen && status.currentPhase == meal.phase
+                    val isCurrent = if (isTabMode) {
+                        selectedPhase == meal.phase
+                    } else {
+                        status?.isOpen == true && status.currentPhase == meal.phase
+                    }
 
                     ScheduleButton(
                         meal = meal,
                         isCurrent = isCurrent,
-                        onClick = { onMealClick(meal) },
+                        onClick = {
+                            if (isTabMode) {
+                                onMealSelect?.invoke(meal.phase)
+                            } else {
+                                onMealClick(meal)
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }

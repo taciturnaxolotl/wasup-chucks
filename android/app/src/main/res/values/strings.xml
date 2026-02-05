@@ -18,6 +18,13 @@
     <string name="lunch">Lunch</string>
     <string name="dinner">Dinner</string>
 
+    <!-- Day Navigation -->
+    <string name="today">Today</string>
+    <string name="tomorrow">Tomorrow</string>
+    <string name="previous_day">Previous day</string>
+    <string name="next_day">Next day</string>
+    <string name="schedule_for">%1$s\'s Schedule</string>
+
     <!-- Sections -->
     <string name="todays_schedule">Today\'s Schedule</string>
     <string name="meal_specials">%1$s Specials</string>
