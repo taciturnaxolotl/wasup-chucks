@@ -149,7 +149,7 @@ struct StatusCard: View {
                 Text(remaining.expandedCountdown)
                     .font(.system(size: 64, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .modifier(NumericContentTransition())
                 
                 Text(status.isOpen ? "until \(status.currentPhase.shortName) ends" : "until \(status.nextPhase?.shortName ?? "open")")
                     .font(.subheadline)
@@ -274,7 +274,7 @@ struct ScheduleButton: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(isCurrent ? .green : .primary)
-        .sensoryFeedback(.selection, trigger: meal.phase)
+        .selectionHaptic(trigger: meal.phase)
         .accessibilityLabel("\(meal.phase.shortName), \(formatTime(meal.startHour, meal.startMinute)) to \(formatTime(meal.endHour, meal.endMinute))\(isCurrent ? ", current meal" : "")")
         .accessibilityHint("Double tap to view menu")
     }
@@ -305,11 +305,26 @@ struct MealDetailSheet: View {
         NavigationStack {
             Group {
                 if venues.isEmpty {
-                    ContentUnavailableView(
-                        "No Menu Available",
-                        systemImage: "fork.knife.circle",
-                        description: Text("No specific menu items for \(meal.phase.rawValue) today.")
-                    )
+                    if #available(iOS 17.0, *) {
+                        ContentUnavailableView(
+                            "No Menu Available",
+                            systemImage: "fork.knife.circle",
+                            description: Text("No specific menu items for \(meal.phase.rawValue) today.")
+                        )
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "fork.knife.circle")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.secondary)
+                            Text("No Menu Available")
+                                .font(.headline)
+                            Text("No specific menu items for \(meal.phase.rawValue) today.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 } else {
                     List {
                         ForEach(venues) { venue in
@@ -487,7 +502,7 @@ struct VenueCard: View {
                 .font(.subheadline.weight(.semibold))
         }
         .tint(.orange)
-        .sensoryFeedback(.selection, trigger: isExpanded)
+        .selectionHaptic(trigger: isExpanded)
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -563,6 +578,38 @@ struct AllergenBadge: View {
             .padding(.vertical, 3)
             .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: - iOS 16 Compatibility
+
+struct NumericContentTransition: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.contentTransition(.numericText())
+        } else {
+            content
+        }
+    }
+}
+
+struct SelectionHaptic: ViewModifier {
+    let trigger: AnyHashable
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.sensoryFeedback(.selection, trigger: trigger)
+        } else {
+            content.onChange(of: trigger) { _ in
+                UISelectionFeedbackGenerator().selectionChanged()
+            }
+        }
+    }
+}
+
+extension View {
+    func selectionHaptic<T: Hashable>(trigger: T) -> some View {
+        modifier(SelectionHaptic(trigger: AnyHashable(trigger)))
     }
 }
 

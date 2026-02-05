@@ -363,8 +363,14 @@ struct ChucksWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: ChucksProvider()) { entry in
-            WidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+            if #available(iOS 17.0, *) {
+                WidgetView(entry: entry)
+                    .containerBackground(.fill.tertiary, for: .widget)
+            } else {
+                WidgetView(entry: entry)
+                    .padding()
+                    .background()
+            }
         }
         .configurationDisplayName("Chuck's Status")
         .description("See current meal times and specials at Chuck's.")
@@ -397,12 +403,14 @@ struct WidgetView: View {
 }
 
 // MARK: - Previews
+@available(iOS 17.0, *)
 #Preview("Small", as: .systemSmall) {
     ChucksWidget()
 } timeline: {
     ChucksEntry(date: Date(), status: ChucksStatus.calculate(), specials: [], venueName: "Home Cooking")
 }
 
+@available(iOS 17.0, *)
 #Preview("Medium", as: .systemMedium) {
     ChucksWidget()
 } timeline: {
@@ -414,6 +422,7 @@ struct WidgetView: View {
     ], venueName: "Home Cooking")
 }
 
+@available(iOS 17.0, *)
 #Preview("Large", as: .systemLarge) {
     ChucksWidget()
 } timeline: {
@@ -427,18 +436,21 @@ struct WidgetView: View {
     ], venueName: "Home Cooking")
 }
 
+@available(iOS 17.0, *)
 #Preview("Lock Screen - Inline", as: .accessoryInline) {
     ChucksWidget()
 } timeline: {
     ChucksEntry(date: Date(), status: ChucksStatus.calculate(), specials: [], venueName: "Home Cooking")
 }
 
+@available(iOS 17.0, *)
 #Preview("Lock Screen - Circular", as: .accessoryCircular) {
     ChucksWidget()
 } timeline: {
     ChucksEntry(date: Date(), status: ChucksStatus.calculate(), specials: [], venueName: "Home Cooking")
 }
 
+@available(iOS 17.0, *)
 #Preview("Lock Screen - Rectangular", as: .accessoryRectangular) {
     ChucksWidget()
 } timeline: {
