@@ -40,107 +40,31 @@ struct ContentView: View {
         allMenus.keys.sorted()
     }
 
-    var isViewingToday: Bool {
-        selectedDateIndex == 0
-    }
-
-    var selectedDateMenu: [VenueMenu] {
-        guard selectedDateIndex < availableDates.count else { return [] }
-        return allMenus[availableDates[selectedDateIndex]] ?? []
-    }
-
-    var selectedDateSchedule: [MealSchedule] {
-        guard selectedDateIndex < availableDates.count else { return [] }
-        let dateKey = availableDates[selectedDateIndex]
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "America/New_York")
-        guard let date = formatter.date(from: dateKey) else { return [] }
-        let weekday = CedarvilleTime.calendar.component(.weekday, from: date)
-        return MealSchedule.schedule(for: weekday)
-    }
-
-    var futureMealVenues: [VenueMenu] {
-        selectedDateMenu.filter { $0.slot == selectedFutureMeal.apiSlot }
-            .sorted { $0.venue < $1.venue }
-    }
-
-    var futureAlwaysAvailable: [VenueMenu] {
-        selectedDateMenu.filter { $0.slot == "anytime" }
-            .sorted { $0.venue < $1.venue }
-    }
-
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    if availableDates.count > 1 {
+            Group {
+                if availableDates.count > 1 {
+                    TabView(selection: $selectedDateIndex) {
+                        ForEach(availableDates.indices, id: \.self) { index in
+                            dayPage(for: index)
+                                .tag(index)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .onChange(of: selectedDateIndex) { _ in
+                        selectedFutureMeal = .breakfast
+                    }
+                    .safeAreaInset(edge: .top, spacing: 0) {
                         DateNavigationHeader(
                             selectedDateIndex: $selectedDateIndex,
                             selectedFutureMeal: $selectedFutureMeal,
                             availableDates: availableDates
                         )
+                        .background(.bar)
                     }
-
-                    if isViewingToday {
-                        // Today's view
-                        if isRegularWidth {
-                            HStack(spacing: 16) {
-                                StatusCard(status: status)
-                                    .frame(maxHeight: .infinity, alignment: .top)
-                                ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
-                                    .frame(maxHeight: .infinity, alignment: .top)
-                            }
-                            .fixedSize(horizontal: false, vertical: true)
-                        } else {
-                            StatusCard(status: status)
-                            ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
-                        }
-
-                        if isLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity, minHeight: 200)
-                        } else if let error = loadError {
-                            ErrorCard(error: error) {
-                                Task { await loadMenu() }
-                            }
-                        } else {
-                            CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth)
-                        }
-                    } else {
-                        // Future day view
-                        ScheduleCard(
-                            schedule: selectedDateSchedule,
-                            selectedMealPhase: $selectedFutureMeal
-                        )
-
-                        if isLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity, minHeight: 200)
-                        } else if let error = loadError {
-                            ErrorCard(error: error) {
-                                Task { await loadMenu() }
-                            }
-                        } else {
-                            CurrentMealView(menu: selectedDateMenu, slot: selectedFutureMeal.apiSlot, isOpen: true, isRegularWidth: isRegularWidth)
-                        }
-                    }
-
-                    // Footer
-                    VStack(spacing: 4) {
-                        Text("Made with \u{2665} by Kieran Klukas")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                        Link("Privacy Policy", destination: URL(string: "https://dunkirk.sh/wasup-chucks/")!)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.top, 16)
+                } else {
+                    dayPage(for: 0)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
-                .frame(maxWidth: isRegularWidth ? 900 : .infinity)
-                .frame(maxWidth: .infinity)
             }
             .navigationTitle("Wasup Chuck's")
             .onReceive(timer) { _ in
@@ -149,15 +73,76 @@ struct ContentView: View {
             .task {
                 await loadMenu()
             }
-            .refreshable {
-                selectedDateIndex = 0
-                await ChucksService.shared.invalidateCache()
-                await loadMenu()
-            }
             .sheet(item: $selectedMeal) { meal in
                 MealDetailSheet(meal: meal, menu: todayMenu)
             }
         }
+    }
+
+    @ViewBuilder
+    func dayPage(for index: Int) -> some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                if index == 0 {
+                    TodayContent(
+                        status: status,
+                        todayMenu: todayMenu,
+                        selectedMeal: $selectedMeal,
+                        currentSlot: currentSlot,
+                        isLoading: isLoading,
+                        loadError: loadError,
+                        isRegularWidth: isRegularWidth,
+                        onRetry: { Task { await loadMenu() } }
+                    )
+                } else {
+                    FutureDayContent(
+                        schedule: scheduleForDate(at: index),
+                        selectedFutureMeal: $selectedFutureMeal,
+                        menu: menuForDate(at: index),
+                        isLoading: isLoading,
+                        loadError: loadError,
+                        isRegularWidth: isRegularWidth,
+                        onRetry: { Task { await loadMenu() } }
+                    )
+                }
+
+                // Footer
+                VStack(spacing: 4) {
+                    Text("Made with \u{2665} by Kieran Klukas")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Link("Privacy Policy", destination: URL(string: "https://dunkirk.sh/wasup-chucks/")!)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.top, 16)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+            .frame(maxWidth: isRegularWidth ? 900 : .infinity)
+            .frame(maxWidth: .infinity)
+        }
+        .refreshable {
+            selectedDateIndex = 0
+            await ChucksService.shared.invalidateCache()
+            await loadMenu()
+        }
+    }
+
+    func menuForDate(at index: Int) -> [VenueMenu] {
+        guard index < availableDates.count else { return [] }
+        return allMenus[availableDates[index]] ?? []
+    }
+
+    func scheduleForDate(at index: Int) -> [MealSchedule] {
+        guard index < availableDates.count else { return [] }
+        let dateKey = availableDates[index]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        guard let date = formatter.date(from: dateKey) else { return [] }
+        let weekday = CedarvilleTime.calendar.component(.weekday, from: date)
+        return MealSchedule.schedule(for: weekday)
     }
 
     func loadMenu() async {
@@ -176,6 +161,73 @@ struct ContentView: View {
             print("Failed to load menu: \(error)")
         }
         isLoading = false
+    }
+}
+
+// MARK: - Page Content Views
+
+private struct TodayContent: View {
+    let status: ChucksStatus
+    let todayMenu: [VenueMenu]
+    @Binding var selectedMeal: MealSchedule?
+    let currentSlot: String
+    let isLoading: Bool
+    let loadError: Error?
+    let isRegularWidth: Bool
+    let onRetry: () -> Void
+
+    var body: some View {
+        Group {
+            if isRegularWidth {
+                HStack(spacing: 16) {
+                    StatusCard(status: status)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                    ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                StatusCard(status: status)
+                ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+            }
+
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 200)
+            } else if let error = loadError {
+                ErrorCard(error: error, retry: onRetry)
+            } else {
+                CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth)
+            }
+        }
+    }
+}
+
+private struct FutureDayContent: View {
+    let schedule: [MealSchedule]
+    @Binding var selectedFutureMeal: MealPhase
+    let menu: [VenueMenu]
+    let isLoading: Bool
+    let loadError: Error?
+    let isRegularWidth: Bool
+    let onRetry: () -> Void
+
+    var body: some View {
+        Group {
+            ScheduleCard(
+                schedule: schedule,
+                selectedMealPhase: $selectedFutureMeal
+            )
+
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 200)
+            } else if let error = loadError {
+                ErrorCard(error: error, retry: onRetry)
+            } else {
+                CurrentMealView(menu: menu, slot: selectedFutureMeal.apiSlot, isOpen: true, isRegularWidth: isRegularWidth)
+            }
+        }
     }
 }
 
