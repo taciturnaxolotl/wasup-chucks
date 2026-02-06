@@ -5,33 +5,36 @@ All notable changes to Wasup Chuck's will be documented in this file.
 ## [1.2.0] - 2026-02-06
 
 ### Added
-- **Favorites System** (iOS & Android)
-  - Mark individual menu items as favorites
-  - Add keyword-based favorites (e.g., "pizza", "fish")
-  - Visual highlighting of favorite items with star icons
-  - Favorites manager sheet for managing items and keywords
-  - Persistent storage across app launches
-  
-- **Notifications** (iOS & Android)
-  - Receive notifications 1 hour before meals when favorites are available
-  - Smart notification content showing up to 3 items with count for additional matches
+- **Favorites System**: Mark and track your favorite menu items
+  - Tap star icons on menu items to save favorites
+  - Add keyword-based favorites (e.g., "pizza", "fish") to auto-match items
+  - Visual highlighting with orange stars and backgrounds
+  - Persistent storage across app restarts
+  - Favorites manager sheet for easy organization
+- **Smart Notifications**: Get notified when your favorites are available
+  - Alerts sent 1 hour before meals with favorite items
+  - Shows up to 3 items with count for additional matches
   - Automatic rescheduling when favorites or menus change
-  - Works with both individual items and keyword-based favorites
-
-- **Future Day View** (iOS & Android)
-  - Swipe through multiple days of menus
-  - Navigate with left/right arrows
-  - View schedules for upcoming days
-  - Select different meals for future days
-  - Displays dates (Today, Tomorrow, day names)
-
-- **GitHub Actions**
-  - Automated APK builds on release
+  - Works with both individual items and keyword matches
+- **Multi-Day View**: Plan ahead with future menu access
+  - Swipe through multiple days of upcoming menus
+  - Navigate with arrow buttons or swipe gestures
+  - Select different meals (Breakfast, Lunch, Dinner) for each day
+  - Clear date labels: "Today", "Tomorrow", and day-of-week names
+- **GitHub Actions**: Automated APK builds on release
 
 ### Changed
-- Updated Android UI to support favorites with star buttons
-- Enhanced venue cards with favorite item highlighting
-- Improved navigation between days
+- Android UI enhanced with star buttons and favorite highlighting
+- Improved venue cards with favorite item backgrounds
+- Better navigation experience between days
+
+### Technical
+- FavoritesRepository with DataStore for Android
+- NotificationScheduler using WorkManager
+- POST_NOTIFICATIONS permission added for Android
+- Updated VenueCard, HomeScreen, HomeViewModel components
+
+**Full Changelog**: https://github.com/taciturnaxolotl/wasup-chucks/compare/v1.1.0...v1.2.0
 
 ## [1.1.0] - 2025-01-30
 
