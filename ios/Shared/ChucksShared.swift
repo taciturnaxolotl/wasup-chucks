@@ -6,6 +6,7 @@
 //
 
 import Foundation
+public import Combine
 
 // MARK: - API Models
 
@@ -283,6 +284,58 @@ extension TimeInterval {
         } else {
             return "\(seconds)s"
         }
+    }
+}
+
+// MARK: - Favorites Store
+
+public class FavoritesStore: ObservableObject {
+    private static let appGroupID = "group.sh.dunkirk.wasup-chucks"
+
+    private static var defaults: UserDefaults {
+        UserDefaults(suiteName: appGroupID) ?? .standard
+    }
+
+    private static let itemsKey = "favoriteItems"
+    private static let keywordsKey = "favoriteKeywords"
+
+    @Published public var favoriteItems: Set<String> {
+        didSet { Self.defaults.set(Array(favoriteItems), forKey: Self.itemsKey) }
+    }
+
+    @Published public var favoriteKeywords: Set<String> {
+        didSet { Self.defaults.set(Array(favoriteKeywords), forKey: Self.keywordsKey) }
+    }
+
+    public init() {
+        let items = Self.defaults.stringArray(forKey: Self.itemsKey) ?? []
+        let keywords = Self.defaults.stringArray(forKey: Self.keywordsKey) ?? []
+        self.favoriteItems = Set(items)
+        self.favoriteKeywords = Set(keywords)
+    }
+
+    public func isFavorite(_ item: MenuItem) -> Bool {
+        if favoriteItems.contains(item.name) { return true }
+        let lowered = item.name.lowercased()
+        return favoriteKeywords.contains { lowered.contains($0.lowercased()) }
+    }
+
+    public func toggleItem(_ name: String) {
+        if favoriteItems.contains(name) {
+            favoriteItems.remove(name)
+        } else {
+            favoriteItems.insert(name)
+        }
+    }
+
+    public func addKeyword(_ keyword: String) {
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        favoriteKeywords.insert(trimmed)
+    }
+
+    public func removeKeyword(_ keyword: String) {
+        favoriteKeywords.remove(keyword)
     }
 }
 

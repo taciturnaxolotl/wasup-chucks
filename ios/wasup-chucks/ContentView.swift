@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var isLoading = true
     @State private var loadError: Error? = nil
     @State private var selectedMeal: MealSchedule? = nil
+    @StateObject private var favoritesStore = FavoritesStore()
+    @State private var showFavoritesManager = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -93,13 +95,30 @@ struct ContentView: View {
                             .animation(.easeInOut, value: selectedDateIndex)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            withAnimation { selectedDateIndex += 1 }
-                            selectedFutureMeal = .breakfast
-                        } label: {
-                            Image(systemName: "chevron.right")
+                        HStack(spacing: 12) {
+                            Button {
+                                showFavoritesManager = true
+                            } label: {
+                                Image(systemName: "star.fill")
+                            }
+                            .tint(.orange)
+                            Button {
+                                withAnimation { selectedDateIndex += 1 }
+                                selectedFutureMeal = .breakfast
+                            } label: {
+                                Image(systemName: "chevron.right")
+                            }
+                            .disabled(selectedDateIndex >= availableDates.count - 1)
                         }
-                        .disabled(selectedDateIndex >= availableDates.count - 1)
+                    }
+                } else {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showFavoritesManager = true
+                        } label: {
+                            Image(systemName: "star.fill")
+                        }
+                        .tint(.orange)
                     }
                 }
             }
@@ -110,7 +129,10 @@ struct ContentView: View {
                 await loadMenu()
             }
             .sheet(item: $selectedMeal) { meal in
-                MealDetailSheet(meal: meal, menu: todayMenu)
+                MealDetailSheet(meal: meal, menu: todayMenu, favoritesStore: favoritesStore)
+            }
+            .sheet(isPresented: $showFavoritesManager) {
+                FavoritesManagerSheet(favoritesStore: favoritesStore)
             }
         }
     }
@@ -128,6 +150,7 @@ struct ContentView: View {
                         isLoading: isLoading,
                         loadError: loadError,
                         isRegularWidth: isRegularWidth,
+                        favoritesStore: favoritesStore,
                         onRetry: { Task { await loadMenu() } }
                     )
                 } else {
@@ -138,6 +161,7 @@ struct ContentView: View {
                         isLoading: isLoading,
                         loadError: loadError,
                         isRegularWidth: isRegularWidth,
+                        favoritesStore: favoritesStore,
                         onRetry: { Task { await loadMenu() } }
                     )
                 }
@@ -210,6 +234,7 @@ private struct TodayContent: View {
     let isLoading: Bool
     let loadError: Error?
     let isRegularWidth: Bool
+    @ObservedObject var favoritesStore: FavoritesStore
     let onRetry: () -> Void
 
     var body: some View {
@@ -233,7 +258,7 @@ private struct TodayContent: View {
             } else if let error = loadError {
                 ErrorCard(error: error, retry: onRetry)
             } else {
-                CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth)
+                CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth, favoritesStore: favoritesStore)
             }
         }
     }
@@ -246,6 +271,7 @@ private struct FutureDayContent: View {
     let isLoading: Bool
     let loadError: Error?
     let isRegularWidth: Bool
+    @ObservedObject var favoritesStore: FavoritesStore
     let onRetry: () -> Void
 
     var body: some View {
@@ -261,7 +287,7 @@ private struct FutureDayContent: View {
             } else if let error = loadError {
                 ErrorCard(error: error, retry: onRetry)
             } else {
-                CurrentMealView(menu: menu, slot: selectedFutureMeal.apiSlot, isOpen: true, isRegularWidth: isRegularWidth)
+                CurrentMealView(menu: menu, slot: selectedFutureMeal.apiSlot, isOpen: true, isRegularWidth: isRegularWidth, favoritesStore: favoritesStore)
             }
         }
     }
@@ -482,13 +508,14 @@ struct ScheduleButton: View {
 struct MealDetailSheet: View {
     let meal: MealSchedule
     let menu: [VenueMenu]
+    @ObservedObject var favoritesStore: FavoritesStore
     @Environment(\.dismiss) private var dismiss
-    
+
     var venues: [VenueMenu] {
         menu.filter { $0.slot == meal.phase.apiSlot }
             .sorted { $0.venue < $1.venue }
     }
-    
+
     var body: some View {
         NavigationStack {
             Group {
@@ -519,6 +546,14 @@ struct MealDetailSheet: View {
                             Section {
                                 ForEach(venue.items) { item in
                                     HStack {
+                                        Button {
+                                            favoritesStore.toggleItem(item.name)
+                                        } label: {
+                                            Image(systemName: favoritesStore.isFavorite(item) ? "star.fill" : "star")
+                                                .foregroundStyle(favoritesStore.isFavorite(item) ? .orange : .secondary)
+                                                .font(.subheadline)
+                                        }
+                                        .buttonStyle(.plain)
                                         Text(item.name)
                                             .font(.body)
                                         Spacer()
@@ -558,6 +593,7 @@ struct CurrentMealView: View {
     let slot: String
     let isOpen: Bool
     let isRegularWidth: Bool
+    @ObservedObject var favoritesStore: FavoritesStore
 
     var mealSpecificVenues: [VenueMenu] {
         menu.filter { $0.slot == slot }
@@ -578,8 +614,52 @@ struct CurrentMealView: View {
         }
     }
 
+    var favoriteMatches: [(item: MenuItem, venueName: String)] {
+        let allVenues = mealSpecificVenues + alwaysAvailableVenues
+        var matches: [(item: MenuItem, venueName: String)] = []
+        for venue in allVenues {
+            for item in venue.items where favoritesStore.isFavorite(item) {
+                matches.append((item: item, venueName: venue.venue))
+            }
+        }
+        return matches
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Your Favorites Section
+            if !favoriteMatches.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Your Favorites", systemImage: "star.fill")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 4)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(favoriteMatches, id: \.item.id) { match in
+                            HStack(spacing: 8) {
+                                Image(systemName: "star.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(match.item.name)
+                                        .font(.subheadline)
+                                    Text(match.venueName)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                AllergenRow(allergens: match.item.allergens)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                }
+            }
+
             // Meal Specials Section
             if !mealSpecificVenues.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
@@ -589,7 +669,7 @@ struct CurrentMealView: View {
                         .padding(.horizontal, 4)
 
                     MasonryLayout(mealSpecificVenues, columns: isRegularWidth ? 2 : 1, spacing: 12) { venue in
-                        VenueCard(venue: venue)
+                        VenueCard(venue: venue, favoritesStore: favoritesStore)
                     }
                 }
             }
@@ -613,7 +693,7 @@ struct CurrentMealView: View {
                     }
 
                     MasonryLayout(alwaysAvailableVenues, columns: isRegularWidth ? 2 : 1, spacing: 12) { venue in
-                        VenueCard(venue: venue)
+                        VenueCard(venue: venue, favoritesStore: favoritesStore)
                     }
                 }
             }
@@ -665,23 +745,33 @@ struct MasonryLayout<Data: RandomAccessCollection, Content: View>: View where Da
 
 struct VenueCard: View {
     let venue: VenueMenu
+    @ObservedObject var favoritesStore: FavoritesStore
     @State private var isExpanded = true
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(venue.items) { item in
+                    let isFav = favoritesStore.isFavorite(item)
                     HStack(spacing: 8) {
-                        Circle()
-                            .fill(.secondary.opacity(0.5))
-                            .frame(width: 4, height: 4)
+                        Button {
+                            favoritesStore.toggleItem(item.name)
+                        } label: {
+                            Image(systemName: isFav ? "star.fill" : "star")
+                                .foregroundStyle(isFav ? .orange : .secondary)
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
                         Text(item.name)
                             .font(.subheadline)
                         Spacer()
                         AllergenRow(allergens: item.allergens)
                     }
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 4)
+                    .background(isFav ? Color.orange.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(item.name)")
+                    .accessibilityLabel("\(item.name)\(isFav ? ", favorited" : "")")
                 }
             }
             .padding(.top, 8)
@@ -695,6 +785,104 @@ struct VenueCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - Favorites Manager Sheet
+
+struct FavoritesManagerSheet: View {
+    @ObservedObject var favoritesStore: FavoritesStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var newKeyword = ""
+
+    var sortedKeywords: [String] {
+        favoritesStore.favoriteKeywords.sorted()
+    }
+
+    var sortedItems: [String] {
+        favoritesStore.favoriteItems.sorted()
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        TextField("Add keyword (e.g. fish, pizza)", text: $newKeyword)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.done)
+                            .onSubmit { addKeyword() }
+                        Button {
+                            addKeyword()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .disabled(newKeyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                } header: {
+                    Text("Keywords")
+                } footer: {
+                    Text("Items containing a keyword will be highlighted as favorites.")
+                }
+
+                if !sortedKeywords.isEmpty {
+                    Section("Current Keywords") {
+                        ForEach(sortedKeywords, id: \.self) { keyword in
+                            HStack {
+                                Image(systemName: "tag.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                Text(keyword)
+                            }
+                        }
+                        .onDelete { offsets in
+                            for index in offsets {
+                                favoritesStore.removeKeyword(sortedKeywords[index])
+                            }
+                        }
+                    }
+                }
+
+                if !sortedItems.isEmpty {
+                    Section("Favorited Items") {
+                        ForEach(sortedItems, id: \.self) { item in
+                            HStack {
+                                Image(systemName: "star.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                Text(item)
+                            }
+                        }
+                        .onDelete { offsets in
+                            for index in offsets {
+                                favoritesStore.toggleItem(sortedItems[index])
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Favorites")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func addKeyword() {
+        let trimmed = newKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        favoritesStore.addKeyword(trimmed)
+        newKeyword = ""
     }
 }
 
