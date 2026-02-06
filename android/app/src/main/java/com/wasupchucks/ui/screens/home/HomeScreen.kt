@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -44,6 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +58,7 @@ import com.wasupchucks.data.model.MealPhase
 import com.wasupchucks.data.model.MealSchedule
 import com.wasupchucks.data.model.VenueMenu
 import com.wasupchucks.ui.components.ErrorCard
+import com.wasupchucks.ui.components.FavoritesManagerSheet
 import com.wasupchucks.ui.components.MealDetailSheet
 import com.wasupchucks.ui.components.ScheduleCard
 import com.wasupchucks.ui.components.StatusCard
@@ -100,6 +103,15 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    IconButton(onClick = { viewModel.showFavoritesManager(true) }) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = "Manage favorites",
+                            tint = Color(0xFFFF9800)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
@@ -170,6 +182,18 @@ fun HomeScreen(
             onDismiss = { viewModel.selectMeal(null) }
         )
     }
+
+    // Favorites Manager Sheet
+    if (uiState.showFavoritesManager) {
+        FavoritesManagerSheet(
+            favoriteItems = uiState.favoriteItems,
+            favoriteKeywords = uiState.favoriteKeywords,
+            onAddKeyword = { viewModel.addFavoriteKeyword(it) },
+            onRemoveKeyword = { viewModel.removeFavoriteKeyword(it) },
+            onToggleItem = { viewModel.toggleFavoriteItem(it) },
+            onDismiss = { viewModel.showFavoritesManager(false) }
+        )
+    }
 }
 
 @Composable
@@ -234,7 +258,8 @@ private fun TodayPage(
     isExpandedWidth: Boolean,
     onMealClick: (MealSchedule) -> Unit,
     onRetry: () -> Unit,
-    context: Context
+    context: Context,
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
     val mealLabel = getMealLabel(uiState.currentSlot)
 
@@ -311,7 +336,9 @@ private fun TodayPage(
                 mealVenues = uiState.mealSpecificVenues,
                 alwaysAvailableVenues = uiState.alwaysAvailableVenues,
                 mealLabel = mealLabel,
-                isExpandedWidth = isExpandedWidth
+                isExpandedWidth = isExpandedWidth,
+                onFavoriteToggle = { viewModel.toggleFavoriteItem(it) },
+                isFavorite = { viewModel.isFavorite(it) }
             )
         }
 
@@ -328,7 +355,8 @@ private fun FutureDayPage(
     isExpandedWidth: Boolean,
     onMealSelect: (MealPhase) -> Unit,
     onRetry: () -> Unit,
-    context: Context
+    context: Context,
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
     val date = uiState.availableDates.getOrNull(page)
     val schedule = if (date != null) {
@@ -407,7 +435,9 @@ private fun FutureDayPage(
                 mealVenues = mealVenues,
                 alwaysAvailableVenues = alwaysAvailable,
                 mealLabel = uiState.selectedFutureMealPhase.displayName,
-                isExpandedWidth = isExpandedWidth
+                isExpandedWidth = isExpandedWidth,
+                onFavoriteToggle = { viewModel.toggleFavoriteItem(it) },
+                isFavorite = { viewModel.isFavorite(it) }
             )
         }
 
@@ -421,7 +451,9 @@ private fun LazyListScope.MenuVenueContent(
     mealVenues: List<VenueMenu>,
     alwaysAvailableVenues: List<VenueMenu>,
     mealLabel: String,
-    isExpandedWidth: Boolean
+    isExpandedWidth: Boolean,
+    onFavoriteToggle: ((String) -> Unit)? = null,
+    isFavorite: ((com.wasupchucks.data.model.MenuItem) -> Boolean)? = null
 ) {
     // Meal Specials Section
     if (mealVenues.isNotEmpty()) {
@@ -469,7 +501,11 @@ private fun LazyListScope.MenuVenueContent(
             }
         } else {
             items(mealVenues, key = { it.id }) { venue ->
-                VenueCard(venue = venue)
+                VenueCard(
+                    venue = venue,
+                    onFavoriteToggle = onFavoriteToggle,
+                    isFavorite = isFavorite
+                )
             }
         }
     }
@@ -507,7 +543,9 @@ private fun LazyListScope.MenuVenueContent(
                     rowVenues.forEach { venue ->
                         VenueCard(
                             venue = venue,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onFavoriteToggle = onFavoriteToggle,
+                            isFavorite = isFavorite
                         )
                     }
                     if (rowVenues.size == 1) {
@@ -517,7 +555,11 @@ private fun LazyListScope.MenuVenueContent(
             }
         } else {
             items(alwaysAvailableVenues, key = { "${it.id}-always" }) { venue ->
-                VenueCard(venue = venue)
+                VenueCard(
+                    venue = venue,
+                    onFavoriteToggle = onFavoriteToggle,
+                    isFavorite = isFavorite
+                )
             }
         }
     }

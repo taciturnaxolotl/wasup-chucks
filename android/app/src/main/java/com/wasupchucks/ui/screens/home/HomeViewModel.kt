@@ -6,7 +6,9 @@ import com.wasupchucks.data.model.ChucksStatus
 import com.wasupchucks.data.model.MealPhase
 import com.wasupchucks.data.model.MealSchedule
 import com.wasupchucks.data.model.VenueMenu
+import com.wasupchucks.data.repository.FavoritesRepository
 import com.wasupchucks.data.repository.MenuRepository
+import com.wasupchucks.notifications.NotificationScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +23,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val menuRepository: MenuRepository
+    private val menuRepository: MenuRepository,
+    private val favoritesRepository: FavoritesRepository,
+    private val notificationScheduler: NotificationScheduler
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -33,6 +37,35 @@ class HomeViewModel @Inject constructor(
     init {
         loadMenu()
         startStatusTimer()
+        observeFavorites()
+    }
+
+    private fun observeFavorites() {
+        viewModelScope.launch {
+            favoritesRepository.favoriteItems.collect { items ->
+                _uiState.update { it.copy(favoriteItems = items) }
+                rescheduleNotifications()
+            }
+        }
+        viewModelScope.launch {
+            favoritesRepository.favoriteKeywords.collect { keywords ->
+                _uiState.update { it.copy(favoriteKeywords = keywords) }
+                rescheduleNotifications()
+            }
+        }
+    }
+
+    private fun rescheduleNotifications() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            if (state.allMenus.isNotEmpty()) {
+                notificationScheduler.rescheduleNotifications(
+                    menus = state.allMenus,
+                    favoriteItems = state.favoriteItems,
+                    favoriteKeywords = state.favoriteKeywords
+                )
+            }
+        }
     }
 
     private fun startStatusTimer() {
@@ -64,6 +97,7 @@ class HomeViewModel @Inject constructor(
                             error = null
                         )
                     }
+                    rescheduleNotifications()
                 }
                 .onFailure { error ->
                     _uiState.update {
@@ -98,6 +132,7 @@ class HomeViewModel @Inject constructor(
                             error = null
                         )
                     }
+                    rescheduleNotifications()
                 }
                 .onFailure { error ->
                     _uiState.update {
@@ -125,6 +160,33 @@ class HomeViewModel @Inject constructor(
 
     fun selectMeal(meal: MealSchedule?) {
         _uiState.update { it.copy(selectedMeal = meal) }
+    }
+
+    fun toggleFavoriteItem(name: String) {
+        viewModelScope.launch {
+            favoritesRepository.toggleItem(name)
+        }
+    }
+
+    fun addFavoriteKeyword(keyword: String) {
+        viewModelScope.launch {
+            favoritesRepository.addKeyword(keyword)
+        }
+    }
+
+    fun removeFavoriteKeyword(keyword: String) {
+        viewModelScope.launch {
+            favoritesRepository.removeKeyword(keyword)
+        }
+    }
+
+    fun showFavoritesManager(show: Boolean) {
+        _uiState.update { it.copy(showFavoritesManager = show) }
+    }
+
+    fun isFavorite(item: com.wasupchucks.data.model.MenuItem): Boolean {
+        val state = _uiState.value
+        return favoritesRepository.isFavorite(item, state.favoriteItems, state.favoriteKeywords)
     }
 
     private fun parseSortedDates(menuMap: Map<String, List<VenueMenu>>): List<LocalDate> {

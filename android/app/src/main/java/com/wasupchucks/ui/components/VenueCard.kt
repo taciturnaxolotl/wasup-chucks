@@ -20,7 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
@@ -32,16 +35,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.wasupchucks.data.model.MenuItem
 import com.wasupchucks.data.model.VenueMenu
 
 @Composable
 fun VenueCard(
     venue: VenueMenu,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onFavoriteToggle: ((String) -> Unit)? = null,
+    isFavorite: ((MenuItem) -> Boolean)? = null
 ) {
     var isExpanded by rememberSaveable { mutableStateOf(true) }
 
@@ -100,22 +107,43 @@ fun VenueCard(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     venue.items.forEach { item ->
+                        val isFav = isFavorite?.invoke(item) ?: false
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .background(
+                                    if (isFav) Color(0xFFFF9800).copy(alpha = 0.08f) 
+                                    else Color.Transparent,
+                                    MaterialTheme.shapes.small
+                                )
+                                .padding(vertical = 4.dp, horizontal = 4.dp)
                                 .semantics { contentDescription = item.name },
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Bullet point
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                        CircleShape
+                            // Star button or bullet
+                            if (onFavoriteToggle != null) {
+                                IconButton(
+                                    onClick = { onFavoriteToggle(item.name) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isFav) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                        contentDescription = if (isFav) "Remove from favorites" else "Add to favorites",
+                                        tint = if (isFav) Color(0xFFFF9800) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
                                     )
-                            )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                            CircleShape
+                                        )
+                                )
+                            }
 
                             Text(
                                 text = item.name,

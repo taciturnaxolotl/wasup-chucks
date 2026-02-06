@@ -17,7 +17,10 @@ data class HomeUiState(
     val allMenus: Map<String, List<VenueMenu>> = emptyMap(),
     val availableDates: List<LocalDate> = emptyList(),
     val selectedDateIndex: Int = 0,
-    val selectedFutureMealPhase: MealPhase = MealPhase.BREAKFAST
+    val selectedFutureMealPhase: MealPhase = MealPhase.BREAKFAST,
+    val favoriteItems: Set<String> = emptySet(),
+    val favoriteKeywords: Set<String> = emptySet(),
+    val showFavoritesManager: Boolean = false
 ) {
     val currentSlot: String
         get() = if (status.isOpen) {
