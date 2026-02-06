@@ -40,6 +40,21 @@ struct ContentView: View {
         allMenus.keys.sorted()
     }
 
+    private func dateLabel(for index: Int) -> String {
+        guard index < availableDates.count else { return "" }
+        if index == 0 { return "Today" }
+        if index == 1 { return "Tomorrow" }
+        let dateKey = availableDates[index]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        guard let date = formatter.date(from: dateKey) else { return dateKey }
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateFormat = "EEEE, MMM d"
+        displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+        return displayFormatter.string(from: date)
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -51,22 +66,43 @@ struct ContentView: View {
                         }
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
+                    .ignoresSafeArea(.container, edges: .bottom)
                     .onChange(of: selectedDateIndex) { _ in
                         selectedFutureMeal = .breakfast
-                    }
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        DateNavigationHeader(
-                            selectedDateIndex: $selectedDateIndex,
-                            selectedFutureMeal: $selectedFutureMeal,
-                            availableDates: availableDates
-                        )
-                        .background(.bar)
                     }
                 } else {
                     dayPage(for: 0)
                 }
             }
             .navigationTitle("Wasup Chuck's")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if availableDates.count > 1 {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            withAnimation { selectedDateIndex -= 1 }
+                            selectedFutureMeal = .breakfast
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                        .disabled(selectedDateIndex <= 0)
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text(dateLabel(for: selectedDateIndex))
+                            .font(.headline)
+                            .animation(.easeInOut, value: selectedDateIndex)
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            withAnimation { selectedDateIndex += 1 }
+                            selectedFutureMeal = .breakfast
+                        } label: {
+                            Image(systemName: "chevron.right")
+                        }
+                        .disabled(selectedDateIndex >= availableDates.count - 1)
+                    }
+                }
+            }
             .onReceive(timer) { _ in
                 status = ChucksStatus.calculate()
             }
@@ -228,63 +264,6 @@ private struct FutureDayContent: View {
                 CurrentMealView(menu: menu, slot: selectedFutureMeal.apiSlot, isOpen: true, isRegularWidth: isRegularWidth)
             }
         }
-    }
-}
-
-// MARK: - Date Navigation Header
-
-struct DateNavigationHeader: View {
-    @Binding var selectedDateIndex: Int
-    @Binding var selectedFutureMeal: MealPhase
-    let availableDates: [String]
-
-    private func dateLabel(for index: Int) -> String {
-        guard index < availableDates.count else { return "" }
-        if index == 0 { return "Today" }
-        if index == 1 { return "Tomorrow" }
-        let dateKey = availableDates[index]
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "America/New_York")
-        guard let date = formatter.date(from: dateKey) else { return dateKey }
-        let displayFormatter = DateFormatter()
-        displayFormatter.dateFormat = "EEEE, MMM d"
-        displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-        return displayFormatter.string(from: date)
-    }
-
-    var body: some View {
-        HStack {
-            Button {
-                selectedDateIndex -= 1
-                selectedFutureMeal = .breakfast
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.title3.weight(.semibold))
-            }
-            .disabled(selectedDateIndex <= 0)
-            .modifier(LiquidGlassButtonModifier())
-
-            Spacer()
-
-            Text(dateLabel(for: selectedDateIndex))
-                .font(.headline)
-                .animation(.easeInOut, value: selectedDateIndex)
-
-            Spacer()
-
-            Button {
-                selectedDateIndex += 1
-                selectedFutureMeal = .breakfast
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.title3.weight(.semibold))
-            }
-            .disabled(selectedDateIndex >= availableDates.count - 1)
-            .modifier(LiquidGlassButtonModifier())
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
     }
 }
 
@@ -787,18 +766,6 @@ struct AllergenBadge: View {
             .padding(.vertical, 3)
             .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
             .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Liquid Glass Button
-
-struct LiquidGlassButtonModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.buttonStyle(.glass)
-        } else {
-            content.buttonStyle(.bordered)
-        }
     }
 }
 
