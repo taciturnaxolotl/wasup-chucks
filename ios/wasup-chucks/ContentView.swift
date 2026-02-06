@@ -134,6 +134,26 @@ struct ContentView: View {
             .sheet(isPresented: $showFavoritesManager) {
                 FavoritesManagerSheet(favoritesStore: favoritesStore)
             }
+            .onChange(of: favoritesStore.favoriteItems) { _ in
+                if !favoritesStore.favoriteItems.isEmpty || !favoritesStore.favoriteKeywords.isEmpty {
+                    NotificationScheduler.shared.requestPermissionIfNeeded()
+                }
+                NotificationScheduler.shared.reschedule(
+                    menus: allMenus,
+                    favoriteItems: favoritesStore.favoriteItems,
+                    favoriteKeywords: favoritesStore.favoriteKeywords
+                )
+            }
+            .onChange(of: favoritesStore.favoriteKeywords) { _ in
+                if !favoritesStore.favoriteItems.isEmpty || !favoritesStore.favoriteKeywords.isEmpty {
+                    NotificationScheduler.shared.requestPermissionIfNeeded()
+                }
+                NotificationScheduler.shared.reschedule(
+                    menus: allMenus,
+                    favoriteItems: favoritesStore.favoriteItems,
+                    favoriteKeywords: favoritesStore.favoriteKeywords
+                )
+            }
         }
     }
 
@@ -216,6 +236,11 @@ struct ContentView: View {
             dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
             let dateKey = dateFormatter.string(from: Date())
             todayMenu = menu[dateKey] ?? []
+            NotificationScheduler.shared.reschedule(
+                menus: allMenus,
+                favoriteItems: favoritesStore.favoriteItems,
+                favoriteKeywords: favoritesStore.favoriteKeywords
+            )
         } catch {
             loadError = error
             print("Failed to load menu: \(error)")

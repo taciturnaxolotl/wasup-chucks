@@ -339,6 +339,68 @@ public class FavoritesStore: ObservableObject {
     }
 }
 
+// MARK: - Favorite Meal Matching
+
+public struct FavoriteMealMatch: Sendable {
+    public let dateKey: String
+    public let meal: MealPhase
+    public let matchedItems: [String]
+
+    public nonisolated init(dateKey: String, meal: MealPhase, matchedItems: [String]) {
+        self.dateKey = dateKey
+        self.meal = meal
+        self.matchedItems = matchedItems
+    }
+}
+
+public func findFavoriteMatches(
+    in menus: MenuResponse,
+    favoriteItems: Set<String>,
+    favoriteKeywords: Set<String>
+) -> [FavoriteMealMatch] {
+    guard !favoriteItems.isEmpty || !favoriteKeywords.isEmpty else { return [] }
+
+    var results: [FavoriteMealMatch] = []
+
+    for (dateKey, venues) in menus {
+        // Group venues by meal slot
+        let slots: [String: [VenueMenu]] = Dictionary(grouping: venues, by: { $0.slot })
+
+        for (slot, slotVenues) in slots {
+            guard let meal = mealPhase(for: slot) else { continue }
+
+            var matched: [String] = []
+            for venue in slotVenues {
+                for item in venue.items {
+                    if favoriteItems.contains(item.name) {
+                        matched.append(item.name)
+                        continue
+                    }
+                    let lowered = item.name.lowercased()
+                    if favoriteKeywords.contains(where: { lowered.contains($0.lowercased()) }) {
+                        matched.append(item.name)
+                    }
+                }
+            }
+
+            if !matched.isEmpty {
+                results.append(FavoriteMealMatch(dateKey: dateKey, meal: meal, matchedItems: matched))
+            }
+        }
+    }
+
+    return results
+}
+
+private func mealPhase(for slot: String) -> MealPhase? {
+    switch slot {
+    case "breakfast": return .breakfast
+    case "lunch": return .lunch
+    case "dinner": return .dinner
+    default: return nil
+    }
+}
+
 // MARK: - Persistent Cache
 
 private enum MenuCacheIO: Sendable {
