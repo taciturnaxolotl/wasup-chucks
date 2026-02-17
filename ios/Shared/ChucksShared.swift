@@ -298,6 +298,7 @@ public class FavoritesStore: ObservableObject {
 
     private static let itemsKey = "favoriteItems"
     private static let keywordsKey = "favoriteKeywords"
+    private static let notificationsKey = "notificationsEnabled"
 
     @Published public var favoriteItems: Set<String> {
         didSet { Self.defaults.set(Array(favoriteItems), forKey: Self.itemsKey) }
@@ -307,11 +308,16 @@ public class FavoritesStore: ObservableObject {
         didSet { Self.defaults.set(Array(favoriteKeywords), forKey: Self.keywordsKey) }
     }
 
+    @Published public var notificationsEnabled: Bool {
+        didSet { Self.defaults.set(notificationsEnabled, forKey: Self.notificationsKey) }
+    }
+
     public init() {
         let items = Self.defaults.stringArray(forKey: Self.itemsKey) ?? []
         let keywords = Self.defaults.stringArray(forKey: Self.keywordsKey) ?? []
         self.favoriteItems = Set(items)
         self.favoriteKeywords = Set(keywords)
+        self.notificationsEnabled = Self.defaults.object(forKey: Self.notificationsKey) as? Bool ?? true
     }
 
     public func isFavorite(_ item: MenuItem) -> Bool {

@@ -12,6 +12,10 @@ final class NotificationScheduler {
     static let shared = NotificationScheduler()
     private init() {}
 
+    func cancelAll() {
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+    }
+
     func requestPermissionIfNeeded() {
         let center = UNUserNotificationCenter.current()
         center.getNotificationSettings { settings in

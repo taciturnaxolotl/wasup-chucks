@@ -14,16 +14,105 @@ struct ContentView: View {
     @State private var status = ChucksStatus.calculate()
     @State private var todayMenu: [VenueMenu] = []
     @State private var allMenus: MenuResponse = [:]
-    @State private var selectedDateIndex: Int = 0
-    @State private var selectedFutureMeal: MealPhase = .breakfast
     @State private var isLoading = true
     @State private var loadError: Error? = nil
-    @State private var selectedMeal: MealSchedule? = nil
     @StateObject private var favoritesStore = FavoritesStore()
-    @State private var showFavoritesManager = false
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        TabView {
+            TodayTab(
+                status: status,
+                todayMenu: todayMenu,
+                isLoading: isLoading,
+                loadError: loadError,
+                favoritesStore: favoritesStore,
+                onRefresh: {
+                    await ChucksService.shared.invalidateCache()
+                    await loadMenu()
+                },
+                onRetry: { Task { await loadMenu() } }
+            )
+            .tabItem {
+                Label("Today", systemImage: "fork.knife")
+            }
+
+            MoreTab(
+                allMenus: allMenus,
+                isLoading: isLoading,
+                favoritesStore: favoritesStore
+            )
+            .tabItem {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+        }
+        .tint(.orange)
+        .onReceive(timer) { _ in
+            status = ChucksStatus.calculate()
+        }
+        .task {
+            await loadMenu()
+        }
+        .onChange(of: favoritesStore.favoriteItems) { _ in
+            scheduleNotificationsIfNeeded()
+        }
+        .onChange(of: favoritesStore.favoriteKeywords) { _ in
+            scheduleNotificationsIfNeeded()
+        }
+        .onChange(of: favoritesStore.notificationsEnabled) { _ in
+            scheduleNotificationsIfNeeded()
+        }
+    }
+
+    private func scheduleNotificationsIfNeeded() {
+        guard favoritesStore.notificationsEnabled else {
+            NotificationScheduler.shared.cancelAll()
+            return
+        }
+        if !favoritesStore.favoriteItems.isEmpty || !favoritesStore.favoriteKeywords.isEmpty {
+            NotificationScheduler.shared.requestPermissionIfNeeded()
+        }
+        NotificationScheduler.shared.reschedule(
+            menus: allMenus,
+            favoriteItems: favoritesStore.favoriteItems,
+            favoriteKeywords: favoritesStore.favoriteKeywords
+        )
+    }
+
+    func loadMenu() async {
+        isLoading = true
+        loadError = nil
+        do {
+            let menu = try await ChucksService.shared.fetchMenu()
+            allMenus = menu
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            let dateKey = dateFormatter.string(from: Date())
+            todayMenu = menu[dateKey] ?? []
+            scheduleNotificationsIfNeeded()
+        } catch {
+            loadError = error
+            print("Failed to load menu: \(error)")
+        }
+        isLoading = false
+    }
+}
+
+// MARK: - Today Tab
+
+private struct TodayTab: View {
+    let status: ChucksStatus
+    let todayMenu: [VenueMenu]
+    let isLoading: Bool
+    let loadError: Error?
+    @ObservedObject var favoritesStore: FavoritesStore
+    let onRefresh: () async -> Void
+    let onRetry: () -> Void
+
+    @State private var selectedMeal: MealSchedule? = nil
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var currentSlot: String {
         if status.isOpen {
@@ -38,281 +127,328 @@ struct ContentView: View {
         horizontalSizeClass == .regular
     }
 
-    var availableDates: [String] {
-        allMenus.keys.sorted()
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    if isRegularWidth {
+                        HStack(spacing: 16) {
+                            StatusCard(status: status)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                            ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        StatusCard(status: status)
+                        ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
+                    }
+
+                    if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, minHeight: 200)
+                    } else if let error = loadError {
+                        ErrorCard(error: error, retry: onRetry)
+                    } else {
+                        CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth, favoritesStore: favoritesStore)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .frame(maxWidth: isRegularWidth ? 900 : .infinity)
+                .frame(maxWidth: .infinity)
+            }
+            .refreshable {
+                await onRefresh()
+            }
+            .navigationTitle("Wasup Chuck's")
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $selectedMeal) { meal in
+                MealDetailSheet(meal: meal, menu: todayMenu, favoritesStore: favoritesStore)
+            }
+        }
+    }
+}
+
+// MARK: - More Tab
+
+private struct UpcomingDay: Identifiable {
+    let id: String
+    let label: String
+    let schedule: [MealSchedule]
+    let menu: [VenueMenu]
+    let favoriteCount: Int
+}
+
+private struct MoreTab: View {
+    let allMenus: MenuResponse
+    let isLoading: Bool
+    @ObservedObject var favoritesStore: FavoritesStore
+    @State private var selectedDay: UpcomingDay? = nil
+    @State private var newKeyword = ""
+
+    var upcomingDays: [UpcomingDay] {
+        let calendar = CedarvilleTime.calendar
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = calendar.timeZone
+        let todayKey = dateFormatter.string(from: Date())
+
+        return allMenus.keys
+            .sorted()
+            .filter { $0 > todayKey }
+            .compactMap { dateKey -> UpcomingDay? in
+                guard let date = dateFormatter.date(from: dateKey) else { return nil }
+                let weekday = calendar.component(.weekday, from: date)
+                let schedule = MealSchedule.schedule(for: weekday)
+                let menu = allMenus[dateKey] ?? []
+
+                let tomorrow = dateFormatter.string(
+                    from: calendar.date(byAdding: .day, value: 1, to: Date())!
+                )
+
+                let label: String
+                if dateKey == tomorrow {
+                    label = "Tomorrow"
+                } else {
+                    let displayFormatter = DateFormatter()
+                    displayFormatter.timeZone = calendar.timeZone
+                    displayFormatter.dateFormat = "EEEE, MMM d"
+                    label = displayFormatter.string(from: date)
+                }
+
+                var favoriteCount = 0
+                for venue in menu {
+                    for item in venue.items where favoritesStore.isFavorite(item) {
+                        favoriteCount += 1
+                    }
+                }
+
+                return UpcomingDay(
+                    id: dateKey,
+                    label: label,
+                    schedule: schedule,
+                    menu: menu,
+                    favoriteCount: favoriteCount
+                )
+            }
     }
 
-    private func dateLabel(for index: Int) -> String {
-        guard index < availableDates.count else { return "" }
-        if index == 0 { return "Today" }
-        if index == 1 { return "Tomorrow" }
-        let dateKey = availableDates[index]
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "America/New_York")
-        guard let date = formatter.date(from: dateKey) else { return dateKey }
-        let displayFormatter = DateFormatter()
-        displayFormatter.dateFormat = "EEEE, MMM d"
-        displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-        return displayFormatter.string(from: date)
+    var sortedKeywords: [String] {
+        favoritesStore.favoriteKeywords.sorted()
+    }
+
+    var sortedItems: [String] {
+        favoritesStore.favoriteItems.sorted()
     }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if availableDates.count > 1 {
-                    TabView(selection: $selectedDateIndex) {
-                        ForEach(availableDates.indices, id: \.self) { index in
-                            dayPage(for: index)
-                                .tag(index)
+            List {
+                // Upcoming Days
+                if isLoading {
+                    Section("Upcoming Days") {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
                         }
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .ignoresSafeArea(.container, edges: .bottom)
-                    .onChange(of: selectedDateIndex) { _ in
-                        selectedFutureMeal = .breakfast
+                } else if !upcomingDays.isEmpty {
+                    Section("Upcoming Days") {
+                        ForEach(upcomingDays) { day in
+                            Button {
+                                selectedDay = day
+                            } label: {
+                                UpcomingDayRow(day: day)
+                            }
+                            .tint(.primary)
+                        }
                     }
-                } else {
-                    dayPage(for: 0)
+                }
+
+                // Favorite Keywords
+                Section {
+                    HStack {
+                        TextField("Add keyword (e.g. pizza, fish)", text: $newKeyword)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.done)
+                            .onSubmit { addKeyword() }
+                        Button {
+                            addKeyword()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .disabled(newKeyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+
+                    ForEach(sortedKeywords, id: \.self) { keyword in
+                        HStack {
+                            Image(systemName: "tag.fill")
+                                .foregroundStyle(.orange)
+                                .font(.caption)
+                            Text(keyword)
+                        }
+                    }
+                    .onDelete { offsets in
+                        for index in offsets {
+                            favoritesStore.removeKeyword(sortedKeywords[index])
+                        }
+                    }
+                } header: {
+                    Text("Favorite Keywords")
+                } footer: {
+                    Text("Items containing a keyword will be highlighted as favorites.")
+                }
+
+                // Favorited Items
+                if !sortedItems.isEmpty {
+                    Section("Favorited Items") {
+                        ForEach(sortedItems, id: \.self) { item in
+                            HStack {
+                                Image(systemName: "star.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                Text(item)
+                            }
+                        }
+                        .onDelete { offsets in
+                            for index in offsets {
+                                favoritesStore.toggleItem(sortedItems[index])
+                            }
+                        }
+                    }
+                }
+
+                // Notifications
+                Section {
+                    Toggle(isOn: $favoritesStore.notificationsEnabled) {
+                        Label("Favorite Notifications", systemImage: "bell.fill")
+                    }
+                    .tint(.orange)
+                } footer: {
+                    Text("Get notified 1 hour before a meal that has your favorites.")
+                }
+
+                // About
+                Section {
+                    VStack(spacing: 4) {
+                        Text("Made with \u{2665} by Kieran Klukas")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Link("Privacy Policy", destination: URL(string: "https://dunkirk.sh/wasup-chucks/")!)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
                 }
             }
-            .navigationTitle("Wasup Chuck's")
+            .navigationTitle("More")
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $selectedDay) { day in
+                DayMenuSheet(day: day, favoritesStore: favoritesStore)
+            }
+        }
+    }
+
+    private func addKeyword() {
+        let trimmed = newKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        favoritesStore.addKeyword(trimmed)
+        newKeyword = ""
+    }
+}
+
+private struct UpcomingDayRow: View {
+    let day: UpcomingDay
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(day.label)
+                    .font(.body.weight(.medium))
+                Text(day.schedule.map { "\($0.phase.shortName) \(formatTime($0.startHour, $0.startMinute))" }.joined(separator: "  ·  "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if day.favoriteCount > 0 {
+                HStack(spacing: 2) {
+                    Image(systemName: "star.fill")
+                        .font(.caption2)
+                    Text("\(day.favoriteCount)")
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(.orange)
+            }
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func formatTime(_ hour: Int, _ minute: Int) -> String {
+        let period = hour >= 12 ? "p" : "a"
+        let displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour)
+        if minute == 0 {
+            return "\(displayHour)\(period)"
+        }
+        return "\(displayHour):\(String(format: "%02d", minute))\(period)"
+    }
+}
+
+// MARK: - Day Menu Sheet
+
+private struct DayMenuSheet: View {
+    let day: UpcomingDay
+    @ObservedObject var favoritesStore: FavoritesStore
+    @State private var selectedMeal: MealPhase = .breakfast
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var isRegularWidth: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    ScheduleCard(
+                        schedule: day.schedule,
+                        selectedMealPhase: $selectedMeal
+                    )
+
+                    CurrentMealView(
+                        menu: day.menu,
+                        slot: selectedMeal.apiSlot,
+                        isOpen: true,
+                        isRegularWidth: isRegularWidth,
+                        favoritesStore: favoritesStore
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .frame(maxWidth: isRegularWidth ? 900 : .infinity)
+                .frame(maxWidth: .infinity)
+            }
+            .navigationTitle(day.label)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if availableDates.count > 1 {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            withAnimation { selectedDateIndex -= 1 }
-                            selectedFutureMeal = .breakfast
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
-                        .disabled(selectedDateIndex <= 0)
-                    }
-                    ToolbarItem(placement: .principal) {
-                        Text(dateLabel(for: selectedDateIndex))
-                            .font(.headline)
-                            .animation(.easeInOut, value: selectedDateIndex)
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        HStack(spacing: 12) {
-                            Button {
-                                showFavoritesManager = true
-                            } label: {
-                                Image(systemName: "star.fill")
-                            }
-                            .tint(.orange)
-                            Button {
-                                withAnimation { selectedDateIndex += 1 }
-                                selectedFutureMeal = .breakfast
-                            } label: {
-                                Image(systemName: "chevron.right")
-                            }
-                            .disabled(selectedDateIndex >= availableDates.count - 1)
-                        }
-                    }
-                } else {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            showFavoritesManager = true
-                        } label: {
-                            Image(systemName: "star.fill")
-                        }
-                        .tint(.orange)
-                    }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
                 }
-            }
-            .onReceive(timer) { _ in
-                status = ChucksStatus.calculate()
-            }
-            .task {
-                await loadMenu()
-            }
-            .sheet(item: $selectedMeal) { meal in
-                MealDetailSheet(meal: meal, menu: todayMenu, favoritesStore: favoritesStore)
-            }
-            .sheet(isPresented: $showFavoritesManager) {
-                FavoritesManagerSheet(favoritesStore: favoritesStore)
-            }
-            .onChange(of: favoritesStore.favoriteItems) { _ in
-                if !favoritesStore.favoriteItems.isEmpty || !favoritesStore.favoriteKeywords.isEmpty {
-                    NotificationScheduler.shared.requestPermissionIfNeeded()
-                }
-                NotificationScheduler.shared.reschedule(
-                    menus: allMenus,
-                    favoriteItems: favoritesStore.favoriteItems,
-                    favoriteKeywords: favoritesStore.favoriteKeywords
-                )
-            }
-            .onChange(of: favoritesStore.favoriteKeywords) { _ in
-                if !favoritesStore.favoriteItems.isEmpty || !favoritesStore.favoriteKeywords.isEmpty {
-                    NotificationScheduler.shared.requestPermissionIfNeeded()
-                }
-                NotificationScheduler.shared.reschedule(
-                    menus: allMenus,
-                    favoriteItems: favoritesStore.favoriteItems,
-                    favoriteKeywords: favoritesStore.favoriteKeywords
-                )
             }
         }
-    }
-
-    @ViewBuilder
-    func dayPage(for index: Int) -> some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                if index == 0 {
-                    TodayContent(
-                        status: status,
-                        todayMenu: todayMenu,
-                        selectedMeal: $selectedMeal,
-                        currentSlot: currentSlot,
-                        isLoading: isLoading,
-                        loadError: loadError,
-                        isRegularWidth: isRegularWidth,
-                        favoritesStore: favoritesStore,
-                        onRetry: { Task { await loadMenu() } }
-                    )
-                } else {
-                    FutureDayContent(
-                        schedule: scheduleForDate(at: index),
-                        selectedFutureMeal: $selectedFutureMeal,
-                        menu: menuForDate(at: index),
-                        isLoading: isLoading,
-                        loadError: loadError,
-                        isRegularWidth: isRegularWidth,
-                        favoritesStore: favoritesStore,
-                        onRetry: { Task { await loadMenu() } }
-                    )
-                }
-
-                // Footer
-                VStack(spacing: 4) {
-                    Text("Made with \u{2665} by Kieran Klukas")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    Link("Privacy Policy", destination: URL(string: "https://dunkirk.sh/wasup-chucks/")!)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.top, 16)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-            .frame(maxWidth: isRegularWidth ? 900 : .infinity)
-            .frame(maxWidth: .infinity)
-        }
-        .refreshable {
-            selectedDateIndex = 0
-            await ChucksService.shared.invalidateCache()
-            await loadMenu()
-        }
-    }
-
-    func menuForDate(at index: Int) -> [VenueMenu] {
-        guard index < availableDates.count else { return [] }
-        return allMenus[availableDates[index]] ?? []
-    }
-
-    func scheduleForDate(at index: Int) -> [MealSchedule] {
-        guard index < availableDates.count else { return [] }
-        let dateKey = availableDates[index]
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "America/New_York")
-        guard let date = formatter.date(from: dateKey) else { return [] }
-        let weekday = CedarvilleTime.calendar.component(.weekday, from: date)
-        return MealSchedule.schedule(for: weekday)
-    }
-
-    func loadMenu() async {
-        isLoading = true
-        loadError = nil
-        do {
-            let menu = try await ChucksService.shared.fetchMenu()
-            allMenus = menu
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-            dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
-            let dateKey = dateFormatter.string(from: Date())
-            todayMenu = menu[dateKey] ?? []
-            NotificationScheduler.shared.reschedule(
-                menus: allMenus,
-                favoriteItems: favoritesStore.favoriteItems,
-                favoriteKeywords: favoritesStore.favoriteKeywords
-            )
-        } catch {
-            loadError = error
-            print("Failed to load menu: \(error)")
-        }
-        isLoading = false
-    }
-}
-
-// MARK: - Page Content Views
-
-private struct TodayContent: View {
-    let status: ChucksStatus
-    let todayMenu: [VenueMenu]
-    @Binding var selectedMeal: MealSchedule?
-    let currentSlot: String
-    let isLoading: Bool
-    let loadError: Error?
-    let isRegularWidth: Bool
-    @ObservedObject var favoritesStore: FavoritesStore
-    let onRetry: () -> Void
-
-    var body: some View {
-        Group {
-            if isRegularWidth {
-                HStack(spacing: 16) {
-                    StatusCard(status: status)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                    ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            } else {
-                StatusCard(status: status)
-                ScheduleCard(status: status, todayMenu: todayMenu, selectedMeal: $selectedMeal)
-            }
-
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 200)
-            } else if let error = loadError {
-                ErrorCard(error: error, retry: onRetry)
-            } else {
-                CurrentMealView(menu: todayMenu, slot: currentSlot, isOpen: status.isOpen, isRegularWidth: isRegularWidth, favoritesStore: favoritesStore)
-            }
-        }
-    }
-}
-
-private struct FutureDayContent: View {
-    let schedule: [MealSchedule]
-    @Binding var selectedFutureMeal: MealPhase
-    let menu: [VenueMenu]
-    let isLoading: Bool
-    let loadError: Error?
-    let isRegularWidth: Bool
-    @ObservedObject var favoritesStore: FavoritesStore
-    let onRetry: () -> Void
-
-    var body: some View {
-        Group {
-            ScheduleCard(
-                schedule: schedule,
-                selectedMealPhase: $selectedFutureMeal
-            )
-
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 200)
-            } else if let error = loadError {
-                ErrorCard(error: error, retry: onRetry)
-            } else {
-                CurrentMealView(menu: menu, slot: selectedFutureMeal.apiSlot, isOpen: true, isRegularWidth: isRegularWidth, favoritesStore: favoritesStore)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            if let first = day.schedule.first {
+                selectedMeal = first.phase
             }
         }
     }
@@ -322,11 +458,11 @@ private struct FutureDayContent: View {
 
 struct StatusCard: View {
     let status: ChucksStatus
-    
+
     private var statusColor: Color {
         status.isOpen ? .green : .orange
     }
-    
+
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
@@ -334,7 +470,7 @@ struct StatusCard: View {
                     .font(.title2)
                     .foregroundStyle(statusColor)
                     .accessibilityHidden(true)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(status.isOpen ? "Open" : "Closed")
                         .font(.subheadline.weight(.semibold))
@@ -343,18 +479,18 @@ struct StatusCard: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer()
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(status.isOpen ? "Chuck's is currently open for \(status.currentPhase.rawValue)" : "Chuck's is closed")
-            
+
             if let remaining = status.timeRemaining {
                 Text(remaining.expandedCountdown)
                     .font(.system(size: 64, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .modifier(NumericContentTransition())
-                
+
                 Text(status.isOpen ? "until \(status.currentPhase.shortName) ends" : "until \(status.nextPhase?.shortName ?? "open")")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -813,109 +949,11 @@ struct VenueCard: View {
     }
 }
 
-// MARK: - Favorites Manager Sheet
-
-struct FavoritesManagerSheet: View {
-    @ObservedObject var favoritesStore: FavoritesStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var newKeyword = ""
-
-    var sortedKeywords: [String] {
-        favoritesStore.favoriteKeywords.sorted()
-    }
-
-    var sortedItems: [String] {
-        favoritesStore.favoriteItems.sorted()
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    HStack {
-                        TextField("Add keyword (e.g. fish, pizza)", text: $newKeyword)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .submitLabel(.done)
-                            .onSubmit { addKeyword() }
-                        Button {
-                            addKeyword()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                        .disabled(newKeyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                } header: {
-                    Text("Keywords")
-                } footer: {
-                    Text("Items containing a keyword will be highlighted as favorites.")
-                }
-
-                if !sortedKeywords.isEmpty {
-                    Section("Current Keywords") {
-                        ForEach(sortedKeywords, id: \.self) { keyword in
-                            HStack {
-                                Image(systemName: "tag.fill")
-                                    .foregroundStyle(.orange)
-                                    .font(.caption)
-                                Text(keyword)
-                            }
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                favoritesStore.removeKeyword(sortedKeywords[index])
-                            }
-                        }
-                    }
-                }
-
-                if !sortedItems.isEmpty {
-                    Section("Favorited Items") {
-                        ForEach(sortedItems, id: \.self) { item in
-                            HStack {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(.orange)
-                                    .font(.caption)
-                                Text(item)
-                            }
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                favoritesStore.toggleItem(sortedItems[index])
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Favorites")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    private func addKeyword() {
-        let trimmed = newKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        favoritesStore.addKeyword(trimmed)
-        newKeyword = ""
-    }
-}
-
-// MARK: - Allergen Row
+// MARK: - Allergen Views
 
 struct AllergenRow: View {
     let allergens: [Allergen]
-    
+
     var body: some View {
         if !allergens.isEmpty {
             HStack(spacing: 4) {
@@ -927,7 +965,7 @@ struct AllergenRow: View {
             .accessibilityLabel("Contains: \(allergens.map { allergenName($0.alt) }.joined(separator: ", "))")
         }
     }
-    
+
     private func allergenName(_ alt: String) -> String {
         switch alt {
         case "gluten": return "gluten"
@@ -947,7 +985,7 @@ struct AllergenRow: View {
 
 struct AllergenBadge: View {
     let allergen: Allergen
-    
+
     var symbol: String {
         switch allergen.alt {
         case "gluten": return "G"
@@ -963,14 +1001,14 @@ struct AllergenBadge: View {
         default: return "?"
         }
     }
-    
+
     var color: Color {
         switch allergen.alt {
         case "vegetarian", "gluten-free": return .green
         default: return .orange
         }
     }
-    
+
     var body: some View {
         Text(symbol)
             .font(.system(size: 9, weight: .bold, design: .rounded))
