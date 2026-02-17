@@ -12,6 +12,45 @@ final class NotificationScheduler {
     static let shared = NotificationScheduler()
     private init() {}
 
+    func scheduleTest(completion: @escaping (String) -> Void) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .denied:
+                DispatchQueue.main.async { completion("denied") }
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                    if granted {
+                        self.addTestNotification(center: center, completion: completion)
+                    } else {
+                        DispatchQueue.main.async { completion("denied") }
+                    }
+                }
+            default:
+                self.addTestNotification(center: center, completion: completion)
+            }
+        }
+    }
+
+    private func addTestNotification(center: UNUserNotificationCenter, completion: @escaping (String) -> Void) {
+        let content = UNMutableNotificationContent()
+        content.title = "Lunch has your favorites!"
+        content.body = "Pizza, Chicken Parmesan at Chuck's today."
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+        let request = UNNotificationRequest(identifier: "test", content: content, trigger: trigger)
+        center.add(request) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion("error: \(error.localizedDescription)")
+                } else {
+                    completion("scheduled")
+                }
+            }
+        }
+    }
+
     func cancelAll() {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
     }
@@ -65,12 +104,17 @@ final class NotificationScheduler {
                 content.body = "\(shown) +\(itemNames.count - 2) more at Chuck's today."
             }
 
-            let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: notifyDate)
+            // Use device calendar so the trigger fires at the correct local time
+            let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: notifyDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
 
             let requestID = "fav-\(match.dateKey)-\(mealName)"
             let request = UNNotificationRequest(identifier: requestID, content: content, trigger: trigger)
-            center.add(request)
+            center.add(request) { error in
+                if let error = error {
+                    print("Failed to schedule notification \(requestID): \(error)")
+                }
+            }
         }
     }
 }
