@@ -52,7 +52,7 @@ public typealias MenuResponse = [String: [VenueMenu]]
 
 // MARK: - Meal Phase
 
-public enum MealPhase: String, CaseIterable, Sendable {
+public enum MealPhase: String, CaseIterable, Codable, Sendable {
     case breakfast = "Breakfast"
     case lunch = "Lunch"
     case dinner = "Dinner"
@@ -88,7 +88,7 @@ public enum MealPhase: String, CaseIterable, Sendable {
 
 // MARK: - Meal Schedule
 
-public struct MealSchedule: Identifiable, Sendable {
+public struct MealSchedule: Identifiable, Codable, Sendable {
     public nonisolated var id: String { phase.rawValue }
     public let phase: MealPhase
     public let startHour: Int
@@ -129,12 +129,17 @@ public struct MealSchedule: Identifiable, Sendable {
         MealSchedule(phase: .dinner, startHour: 17, startMinute: 0, endHour: 19, endMinute: 30)
     ]
 
-    public nonisolated static func schedule(for weekday: Int) -> [MealSchedule] {
+    /// Baked-in hours, used until the live service-hours feed has been fetched.
+    public nonisolated static func fallbackSchedule(for weekday: Int) -> [MealSchedule] {
         switch weekday {
         case 1: return sundaySchedule
         case 7: return saturdaySchedule
         default: return weekdaySchedule
         }
+    }
+
+    public nonisolated static func schedule(for weekday: Int) -> [MealSchedule] {
+        ScheduleStore.shared.schedule(for: weekday) ?? fallbackSchedule(for: weekday)
     }
 }
 
@@ -594,5 +599,205 @@ public enum ChucksError: Error, LocalizedError, Sendable {
         case .decodingError(let underlying):
             return "Failed to parse menu data: \(underlying.localizedDescription)"
         }
+    }
+}
+
+// MARK: - Service Hours Feed
+
+/// Pioneer's public hours feed for Cedarville. One entry per dining location,
+/// each with rows for "SUN", "MON-FRI", "SAT", and so on.
+private struct ServiceHoursLocation: Decodable {
+    let location: String
+    let meals: [ServiceHoursMeal]
+}
+
+private struct ServiceHoursMeal: Decodable {
+    let hours: [ServiceHoursEntry]
+}
+
+private struct ServiceHoursEntry: Decodable {
+    let day: String
+    let open: String
+    let close: String
+    let isOpen: Bool
+}
+
+private enum ServiceHoursParser {
+    /// Weekday numbers match `Calendar.component(.weekday)`: Sunday is 1, Saturday is 7.
+    private static let dayNumbers = ["SUN": 1, "MON": 2, "TUE": 3, "WED": 4, "THU": 5, "FRI": 6, "SAT": 7]
+
+    /// The Commons splits each meal across several listings. Hot and continental
+    /// breakfast are one breakfast window here; Saturday brunch counts as lunch.
+    private static func phase(for location: String) -> MealPhase? {
+        let name = location.trimmingCharacters(in: .whitespaces).lowercased()
+        guard name.hasPrefix("the commons") else { return nil }
+        if name.hasSuffix("breakfast") { return .breakfast }
+        if name.hasSuffix("lunch") || name.hasSuffix("brunch") { return .lunch }
+        if name.hasSuffix("dinner") { return .dinner }
+        return nil
+    }
+
+    /// Accepts the feed's mixed formats: "8:00 AM", "8:15am", "11:00pm".
+    private static func minutes(from raw: String) -> Int? {
+        let text = raw.lowercased().filter { !$0.isWhitespace }
+        let isPM = text.hasSuffix("pm")
+        guard isPM || text.hasSuffix("am") else { return nil }
+        let clock = text.dropLast(2).split(separator: ":")
+        guard clock.count == 2,
+              var hour = Int(clock[0]),
+              let minute = Int(clock[1]),
+              (1...12).contains(hour), (0..<60).contains(minute) else { return nil }
+        if hour == 12 { hour = 0 }
+        if isPM { hour += 12 }
+        return hour * 60 + minute
+    }
+
+    /// "MON-FRI" spans several days; "SUN" is just one.
+    private static func weekdays(for day: String) -> [Int] {
+        let parts = day.uppercased().split(separator: "-").map(String.init)
+        guard let first = parts.first, let start = dayNumbers[first] else { return [] }
+        guard parts.count == 2, let end = dayNumbers[parts[1]] else { return [start] }
+        return start <= end ? Array(start...end) : Array(start...7) + Array(1...end)
+    }
+
+    static func parse(_ locations: [ServiceHoursLocation]) -> [Int: [MealSchedule]] {
+        // Widest window wins when a phase is listed more than once for a day.
+        var windows: [Int: [MealPhase: (start: Int, end: Int)]] = [:]
+
+        for location in locations {
+            guard let phase = phase(for: location.location) else { continue }
+            for meal in location.meals {
+                for entry in meal.hours where entry.isOpen {
+                    guard let start = minutes(from: entry.open),
+                          let end = minutes(from: entry.close),
+                          start < end else { continue }
+                    for weekday in weekdays(for: entry.day) {
+                        let existing = windows[weekday]?[phase]
+                        windows[weekday, default: [:]][phase] = (
+                            start: min(start, existing?.start ?? start),
+                            end: max(end, existing?.end ?? end)
+                        )
+                    }
+                }
+            }
+        }
+
+        return windows.mapValues { byPhase in
+            byPhase
+                .map { phase, window in
+                    MealSchedule(
+                        phase: phase,
+                        startHour: window.start / 60,
+                        startMinute: window.start % 60,
+                        endHour: window.end / 60,
+                        endMinute: window.end % 60
+                    )
+                }
+                .sorted { $0.startMinutes < $1.startMinutes }
+        }
+    }
+}
+
+// MARK: - Schedule Store
+
+/// Holds the live dining hours. Reads are synchronous because widgets, notifications
+/// and the countdown all ask for the schedule far more often than it changes.
+public final class ScheduleStore: @unchecked Sendable {
+    public static let shared = ScheduleStore()
+
+    private static let appGroupID = "group.sh.dunkirk.wasup-chucks"
+    private static let scheduleKey = "serviceHoursSchedule"
+    private static let fetchedAtKey = "serviceHoursFetchedAt"
+    private static let url = URL(string: "https://oncampusdining.com/api/servicehours/js/v3/?campus=cedarville")!
+    private static let expiration: TimeInterval = 12 * 60 * 60
+
+    private let lock = NSLock()
+    private var schedules: [Int: [MealSchedule]]?
+    private var fetchedAt: Date?
+    private var didLoad = false
+    private var isFetching = false
+
+    private var defaults: UserDefaults {
+        UserDefaults(suiteName: Self.appGroupID) ?? .standard
+    }
+
+    /// Live hours for the given weekday, or nil to fall back to the baked-in schedule.
+    public func schedule(for weekday: Int) -> [MealSchedule]? {
+        lock.lock()
+        defer { lock.unlock() }
+        if !didLoad {
+            didLoad = true
+            loadFromDefaults()
+        }
+        guard let schedule = schedules?[weekday], !schedule.isEmpty else { return nil }
+        return schedule
+    }
+
+    private func loadFromDefaults() {
+        guard let data = defaults.data(forKey: Self.scheduleKey),
+              let decoded = try? JSONDecoder().decode([String: [MealSchedule]].self, from: data) else { return }
+        schedules = Dictionary(uniqueKeysWithValues: decoded.compactMap { key, value in
+            Int(key).map { ($0, value) }
+        })
+        fetchedAt = defaults.object(forKey: Self.fetchedAtKey) as? Date
+    }
+
+    /// True when the stored hours are missing or old enough to re-fetch.
+    private func isStale() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if !didLoad {
+            didLoad = true
+            loadFromDefaults()
+        }
+        guard let fetchedAt else { return true }
+        return Date().timeIntervalSince(fetchedAt) >= Self.expiration
+    }
+
+    /// Claims the right to fetch, so overlapping refreshes only hit the network once.
+    private func beginFetch() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if isFetching { return false }
+        isFetching = true
+        return true
+    }
+
+    private func endFetch() {
+        lock.lock()
+        defer { lock.unlock() }
+        isFetching = false
+    }
+
+    private func store(_ parsed: [Int: [MealSchedule]]) {
+        lock.lock()
+        schedules = parsed
+        fetchedAt = Date()
+        didLoad = true
+        lock.unlock()
+
+        let encodable = Dictionary(uniqueKeysWithValues: parsed.map { (String($0.key), $0.value) })
+        if let encoded = try? JSONEncoder().encode(encodable) {
+            defaults.set(encoded, forKey: Self.scheduleKey)
+            defaults.set(Date(), forKey: Self.fetchedAtKey)
+        }
+    }
+
+    /// Refreshes the hours in the background. Failures are silent: the previously
+    /// stored schedule, or the baked-in one, keeps the app working offline.
+    public func refreshIfNeeded(force: Bool = false) async {
+        guard force || isStale(), beginFetch() else { return }
+        defer { endFetch() }
+
+        var request = URLRequest(url: Self.url, timeoutInterval: 30)
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let locations = try? JSONDecoder().decode([ServiceHoursLocation].self, from: data) else { return }
+
+        let parsed = ServiceHoursParser.parse(locations)
+        guard !parsed.isEmpty else { return }
+        store(parsed)
     }
 }

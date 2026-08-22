@@ -93,6 +93,7 @@ struct GetMealTime: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        await ScheduleStore.shared.refreshIfNeeded()
         let calendar = CedarvilleTime.calendar
         let weekday = calendar.component(.weekday, from: Date())
         let schedule = MealSchedule.schedule(for: weekday)

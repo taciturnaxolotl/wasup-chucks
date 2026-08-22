@@ -1,9 +1,11 @@
 package com.wasupchucks.data.model
 
+import com.squareup.moshi.JsonClass
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
 
+@JsonClass(generateAdapter = true)
 data class MealSchedule(
     val phase: MealPhase,
     val startHour: Int,
@@ -40,12 +42,17 @@ data class MealSchedule(
             MealSchedule(MealPhase.DINNER, 17, 0, 19, 30)
         )
 
-        fun scheduleFor(dayOfWeek: DayOfWeek): List<MealSchedule> {
+        /** Baked-in hours, used until the live service-hours feed has been fetched. */
+        fun fallbackScheduleFor(dayOfWeek: DayOfWeek): List<MealSchedule> {
             return when (dayOfWeek) {
                 DayOfWeek.SUNDAY -> sundaySchedule
                 DayOfWeek.SATURDAY -> saturdaySchedule
                 else -> weekdaySchedule
             }
+        }
+
+        fun scheduleFor(dayOfWeek: DayOfWeek): List<MealSchedule> {
+            return ScheduleStore.scheduleFor(dayOfWeek) ?: fallbackScheduleFor(dayOfWeek)
         }
 
         fun scheduleFor(date: LocalDate): List<MealSchedule> {
@@ -57,5 +64,23 @@ data class MealSchedule(
             val today = LocalDate.now(cedarvilleZone)
             return scheduleFor(today.dayOfWeek)
         }
+    }
+}
+
+/**
+ * Holds the live dining hours in memory. Reads are synchronous because widgets,
+ * notifications and the countdown all ask for the schedule far more often than it
+ * changes; [com.wasupchucks.data.repository.ScheduleRepository] keeps it filled.
+ */
+object ScheduleStore {
+    @Volatile
+    private var overrides: Map<DayOfWeek, List<MealSchedule>> = emptyMap()
+
+    /** Live hours for the given day, or null to fall back to the baked-in schedule. */
+    fun scheduleFor(dayOfWeek: DayOfWeek): List<MealSchedule>? =
+        overrides[dayOfWeek]?.takeIf { it.isNotEmpty() }
+
+    fun apply(schedules: Map<DayOfWeek, List<MealSchedule>>) {
+        overrides = schedules
     }
 }

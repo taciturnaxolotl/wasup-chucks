@@ -8,6 +8,7 @@ import com.wasupchucks.data.model.MealSchedule
 import com.wasupchucks.data.model.VenueMenu
 import com.wasupchucks.data.repository.FavoritesRepository
 import com.wasupchucks.data.repository.MenuRepository
+import com.wasupchucks.data.repository.ScheduleRepository
 import com.wasupchucks.notifications.NotificationScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -24,6 +25,7 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val menuRepository: MenuRepository,
+    private val scheduleRepository: ScheduleRepository,
     private val favoritesRepository: FavoritesRepository,
     private val notificationScheduler: NotificationScheduler
 ) : ViewModel() {
@@ -81,6 +83,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
+            scheduleRepository.refreshIfNeeded()
+
             menuRepository.fetchMenu()
                 .onSuccess { menuMap ->
                     val today = LocalDate.now(cedarvilleZone)
@@ -115,6 +119,7 @@ class HomeViewModel @Inject constructor(
             _uiState.update { it.copy(isRefreshing = true) }
 
             menuRepository.invalidateCache()
+            scheduleRepository.refreshIfNeeded(force = true)
 
             menuRepository.fetchMenu()
                 .onSuccess { menuMap ->

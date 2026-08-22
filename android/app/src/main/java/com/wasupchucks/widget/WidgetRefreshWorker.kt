@@ -11,6 +11,7 @@ import androidx.work.WorkerParameters
 import com.wasupchucks.data.model.ChucksStatus
 import com.wasupchucks.data.model.MealPhase
 import com.wasupchucks.data.repository.MenuRepository
+import com.wasupchucks.data.repository.ScheduleRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.time.LocalDate
@@ -21,11 +22,13 @@ import java.util.concurrent.TimeUnit
 class WidgetRefreshWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted params: WorkerParameters,
-    private val menuRepository: MenuRepository
+    private val menuRepository: MenuRepository,
+    private val scheduleRepository: ScheduleRepository
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         return try {
+            scheduleRepository.refreshIfNeeded()
             val status = ChucksStatus.calculate()
             val phase = if (status.isOpen) status.currentPhase else (status.nextPhase ?: MealPhase.LUNCH)
             val cedarvilleZone = ZoneId.of("America/New_York")

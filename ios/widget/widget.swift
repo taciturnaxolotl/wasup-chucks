@@ -39,6 +39,7 @@ struct ChucksProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ChucksEntry>) -> Void) {
         Task {
+            await ScheduleStore.shared.refreshIfNeeded()
             let status = ChucksStatus.calculate()
             var specials: [MenuItem] = []
             var venueName = "Home Cooking"

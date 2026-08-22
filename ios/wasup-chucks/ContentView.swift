@@ -30,6 +30,7 @@ struct ContentView: View {
                 favoritesStore: favoritesStore,
                 onRefresh: {
                     await ChucksService.shared.invalidateCache()
+                    await ScheduleStore.shared.refreshIfNeeded(force: true)
                     await loadMenu()
                 },
                 onRetry: { Task { await loadMenu() } }
@@ -83,6 +84,8 @@ struct ContentView: View {
     func loadMenu() async {
         isLoading = true
         loadError = nil
+        await ScheduleStore.shared.refreshIfNeeded()
+        status = ChucksStatus.calculate()
         do {
             let menu = try await ChucksService.shared.fetchMenu()
             allMenus = menu

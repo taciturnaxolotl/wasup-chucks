@@ -4,6 +4,7 @@ import android.content.Context
 import com.squareup.moshi.Moshi
 import com.wasupchucks.data.api.ChucksApiInterceptor
 import com.wasupchucks.data.api.ChucksApiService
+import com.wasupchucks.data.api.ServiceHoursApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -75,5 +76,11 @@ object NetworkModule {
     @Singleton
     fun provideChucksApiService(retrofit: Retrofit): ChucksApiService {
         return retrofit.create(ChucksApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideServiceHoursApiService(retrofit: Retrofit): ServiceHoursApiService {
+        return retrofit.create(ServiceHoursApiService::class.java)
     }
 }
