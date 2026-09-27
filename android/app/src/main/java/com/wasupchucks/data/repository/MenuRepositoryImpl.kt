@@ -60,6 +60,9 @@ class MenuRepositoryImpl @Inject constructor(
                 Result.failure(ChucksError.NetworkError)
             } catch (e: com.squareup.moshi.JsonDataException) {
                 Result.failure(ChucksError.DecodingError(e))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Cancellation is not a failure; let it unwind the calling scope.
+                throw e
             } catch (e: Exception) {
                 Result.failure(ChucksError.DecodingError(e))
             }
