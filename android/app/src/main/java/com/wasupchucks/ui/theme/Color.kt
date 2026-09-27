@@ -27,3 +27,16 @@ object StatusColors {
     val ColorScheme.onClosedContainer: Color
         @Composable get() = onTertiaryContainer
 }
+
+/**
+ * Favorites accent. iOS hardcodes orange; here it rides the user's Material You
+ * palette instead. Secondary is free: primary marks open/venue names and
+ * tertiary marks closed, so this stays distinct from both.
+ */
+object FavoriteColors {
+    val ColorScheme.favoriteAccent: Color
+        @Composable get() = secondary
+
+    val ColorScheme.favoriteHighlight: Color
+        @Composable get() = secondaryContainer
+}

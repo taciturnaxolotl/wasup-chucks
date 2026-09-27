@@ -35,9 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.wasupchucks.ui.theme.FavoriteColors.favoriteAccent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,11 +142,11 @@ fun FavoritesManagerSheet(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(Color.Red, RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(8.dp))
                                     .padding(16.dp),
                                 contentAlignment = Alignment.CenterEnd
                             ) {
-                                Text("Delete", color = Color.White)
+                                Text("Delete", color = MaterialTheme.colorScheme.onErrorContainer)
                             }
                         }
                     ) {
@@ -156,7 +156,7 @@ fun FavoritesManagerSheet(
                                 Icon(
                                     imageVector = Icons.Filled.Star,
                                     contentDescription = null,
-                                    tint = Color(0xFFFF9800),
+                                    tint = MaterialTheme.colorScheme.favoriteAccent,
                                     modifier = Modifier.size(20.dp)
                                 )
                             },
@@ -199,11 +199,11 @@ fun FavoritesManagerSheet(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(Color.Red, RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(8.dp))
                                     .padding(16.dp),
                                 contentAlignment = Alignment.CenterEnd
                             ) {
-                                Text("Delete", color = Color.White)
+                                Text("Delete", color = MaterialTheme.colorScheme.onErrorContainer)
                             }
                         }
                     ) {
@@ -213,7 +213,7 @@ fun FavoritesManagerSheet(
                                 Icon(
                                     imageVector = Icons.Filled.Star,
                                     contentDescription = null,
-                                    tint = Color(0xFFFF9800),
+                                    tint = MaterialTheme.colorScheme.favoriteAccent,
                                     modifier = Modifier.size(20.dp)
                                 )
                             },

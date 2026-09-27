@@ -41,7 +41,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +57,7 @@ import com.wasupchucks.ui.components.MealDetailSheet
 import com.wasupchucks.ui.components.ScheduleCard
 import com.wasupchucks.ui.components.StatusCard
 import com.wasupchucks.ui.components.menuVenueContent
+import com.wasupchucks.ui.theme.FavoriteColors.favoriteAccent
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -103,7 +103,7 @@ fun HomeScreen(
                         Icon(
                             imageVector = Icons.Filled.Star,
                             contentDescription = "Manage favorites",
-                            tint = Color(0xFFFF9800)
+                            tint = MaterialTheme.colorScheme.favoriteAccent
                         )
                     }
                 },

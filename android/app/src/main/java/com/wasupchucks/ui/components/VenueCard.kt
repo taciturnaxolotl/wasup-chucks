@@ -42,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.wasupchucks.data.model.MenuItem
 import com.wasupchucks.data.model.VenueMenu
+import com.wasupchucks.ui.theme.FavoriteColors.favoriteAccent
+import com.wasupchucks.ui.theme.FavoriteColors.favoriteHighlight
 
 @Composable
 fun VenueCard(
@@ -112,8 +114,11 @@ fun VenueCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(
-                                    if (isFav) Color(0xFFFF9800).copy(alpha = 0.08f) 
-                                    else Color.Transparent,
+                                    if (isFav) {
+                                        MaterialTheme.colorScheme.favoriteHighlight.copy(alpha = 0.5f)
+                                    } else {
+                                        Color.Transparent
+                                    },
                                     MaterialTheme.shapes.small
                                 )
                                 .padding(vertical = 4.dp, horizontal = 4.dp)
@@ -130,7 +135,11 @@ fun VenueCard(
                                     Icon(
                                         imageVector = if (isFav) Icons.Filled.Star else Icons.Outlined.StarOutline,
                                         contentDescription = if (isFav) "Remove from favorites" else "Add to favorites",
-                                        tint = if (isFav) Color(0xFFFF9800) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = if (isFav) {
+                                            MaterialTheme.colorScheme.favoriteAccent
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
