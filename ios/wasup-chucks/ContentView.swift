@@ -29,11 +29,15 @@ struct ContentView: View {
                 loadError: loadError,
                 favoritesStore: favoritesStore,
                 onRefresh: {
-                    await ChucksService.shared.invalidateCache()
-                    await ScheduleStore.shared.refreshIfNeeded(force: true)
-                    await loadMenu()
+                    // An unstructured task does not inherit cancellation, so the
+                    // ticking clock rebuilding this view mid-pull cannot kill the
+                    // refresh before it finishes.
+                    await Task {
+                        await ScheduleStore.shared.refreshIfNeeded(force: true)
+                        await loadMenu(force: true, showSpinner: false)
+                    }.value
                 },
-                onRetry: { Task { await loadMenu() } }
+                onRetry: { Task { await loadMenu(force: true) } }
             )
             .tabItem {
                 Label("Today", systemImage: "fork.knife")
@@ -57,19 +61,21 @@ struct ContentView: View {
         }
     }
 
-    func loadMenu() async {
-        isLoading = true
+    func loadMenu(force: Bool = false, showSpinner: Bool = true) async {
+        if showSpinner { isLoading = true }
         loadError = nil
         await ScheduleStore.shared.refreshIfNeeded()
         status = ChucksStatus.calculate()
         do {
-            let menu = try await ChucksService.shared.fetchMenu()
+            let menu = try await ChucksService.shared.fetchMenu(forceRefresh: force)
             allMenus = menu
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
             dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
             let dateKey = dateFormatter.string(from: Date())
             todayMenu = menu[dateKey] ?? []
+        } catch is CancellationError {
+            // A superseded or interrupted load is not a failure: keep what we have.
         } catch {
             loadError = error
             print("Failed to load menu: \(error)")

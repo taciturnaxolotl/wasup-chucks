@@ -384,12 +384,6 @@ private enum MenuCacheIO: Sendable {
         }
     }
 
-    nonisolated static func delete(from directory: URL) {
-        let menuURL = directory.appendingPathComponent("menu_cache.json")
-        let metaURL = directory.appendingPathComponent("menu_cache_meta.plist")
-        try? FileManager.default.removeItem(at: menuURL)
-        try? FileManager.default.removeItem(at: metaURL)
-    }
 }
 
 // MARK: - API Service
@@ -425,26 +419,23 @@ public actor ChucksService {
         MenuCacheIO.save(menu: menu, to: dir)
     }
 
-    public func invalidateCache() {
-        cachedMenu = nil
-        cacheDate = nil
-        if let dir = cacheDirectory {
-            MenuCacheIO.delete(from: dir)
-        }
-    }
-
-    public func fetchMenu(days: Int = 5) async throws -> MenuResponse {
-        // Check in-memory cache first
-        if let cached = cachedMenu,
-           let date = cacheDate,
-           Date().timeIntervalSince(date) < cacheExpiration {
-            return cached
+    /// - Parameter forceRefresh: skips reading the cache, but keeps whatever is
+    ///   cached as a fallback so a failed refresh never loses the menu.
+    public func fetchMenu(days: Int = 5, forceRefresh: Bool = false) async throws -> MenuResponse {
+        if !forceRefresh {
+            // Check in-memory cache first
+            if let cached = cachedMenu,
+               let date = cacheDate,
+               Date().timeIntervalSince(date) < cacheExpiration {
+                return cached
+            }
         }
 
         // Check persistent cache
         if cachedMenu == nil {
             loadPersistentCache()
-            if let cached = cachedMenu,
+            if !forceRefresh,
+               let cached = cachedMenu,
                let date = cacheDate,
                Date().timeIntervalSince(date) < cacheExpiration {
                 return cached
@@ -485,6 +476,10 @@ public actor ChucksService {
             return menu
         } catch let error as ChucksError {
             throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
         } catch {
             // Return stale cache on network error if available
             if let cached = cachedMenu {
