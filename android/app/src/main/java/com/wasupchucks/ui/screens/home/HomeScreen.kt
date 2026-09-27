@@ -16,18 +16,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,13 +52,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wasupchucks.R
 import com.wasupchucks.data.model.MealPhase
 import com.wasupchucks.data.model.MealSchedule
-import com.wasupchucks.data.model.VenueMenu
 import com.wasupchucks.ui.components.ErrorCard
 import com.wasupchucks.ui.components.FavoritesManagerSheet
 import com.wasupchucks.ui.components.MealDetailSheet
 import com.wasupchucks.ui.components.ScheduleCard
 import com.wasupchucks.ui.components.StatusCard
-import com.wasupchucks.ui.components.VenueCard
+import com.wasupchucks.ui.components.menuVenueContent
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -332,11 +327,12 @@ private fun TodayPage(
 
         // Menu content
         if (!uiState.isLoading && uiState.error == null) {
-            MenuVenueContent(
+            menuVenueContent(
                 mealVenues = uiState.mealSpecificVenues,
                 alwaysAvailableVenues = uiState.alwaysAvailableVenues,
                 mealLabel = mealLabel,
                 isExpandedWidth = isExpandedWidth,
+                keyPrefix = "today",
                 onFavoriteToggle = { viewModel.toggleFavoriteItem(it) },
                 isFavorite = { viewModel.isFavorite(it) }
             )
@@ -431,11 +427,12 @@ private fun FutureDayPage(
 
         // Menu content for future day
         if (!uiState.isLoading && uiState.error == null) {
-            MenuVenueContent(
+            menuVenueContent(
                 mealVenues = mealVenues,
                 alwaysAvailableVenues = alwaysAvailable,
                 mealLabel = uiState.selectedFutureMealPhase.displayName,
                 isExpandedWidth = isExpandedWidth,
+                keyPrefix = "day$page",
                 onFavoriteToggle = { viewModel.toggleFavoriteItem(it) },
                 isFavorite = { viewModel.isFavorite(it) }
             )
@@ -444,124 +441,6 @@ private fun FutureDayPage(
         // Footer
         item { FooterContent(context = context) }
         item { Spacer(modifier = Modifier.height(16.dp)) }
-    }
-}
-
-private fun LazyListScope.MenuVenueContent(
-    mealVenues: List<VenueMenu>,
-    alwaysAvailableVenues: List<VenueMenu>,
-    mealLabel: String,
-    isExpandedWidth: Boolean,
-    onFavoriteToggle: ((String) -> Unit)? = null,
-    isFavorite: ((com.wasupchucks.data.model.MenuItem) -> Boolean)? = null
-) {
-    // Meal Specials Section
-    if (mealVenues.isNotEmpty()) {
-        item(key = "meal-header") {
-            Row(
-                modifier = Modifier
-                    .widthIn(max = 900.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Schedule,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = stringResource(R.string.meal_specials, mealLabel),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        if (isExpandedWidth) {
-            val chunkedVenues = mealVenues.chunked(2)
-            items(chunkedVenues, key = { it.map { v -> v.id }.joinToString() }) { rowVenues ->
-                Row(
-                    modifier = Modifier
-                        .widthIn(max = 900.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    rowVenues.forEach { venue ->
-                        VenueCard(
-                            venue = venue,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (rowVenues.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        } else {
-            items(mealVenues, key = { it.id }) { venue ->
-                VenueCard(
-                    venue = venue,
-                    onFavoriteToggle = onFavoriteToggle,
-                    isFavorite = isFavorite
-                )
-            }
-        }
-    }
-
-    // Always Available Section
-    if (alwaysAvailableVenues.isNotEmpty()) {
-        item(key = "always-header") {
-            Row(
-                modifier = Modifier
-                    .widthIn(max = 900.dp)
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                HorizontalDivider(modifier = Modifier.weight(1f))
-                Text(
-                    text = stringResource(R.string.always_available),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                HorizontalDivider(modifier = Modifier.weight(1f))
-            }
-        }
-
-        if (isExpandedWidth) {
-            val chunkedVenues = alwaysAvailableVenues.chunked(2)
-            items(chunkedVenues, key = { it.map { v -> v.id }.joinToString() + "-always" }) { rowVenues ->
-                Row(
-                    modifier = Modifier
-                        .widthIn(max = 900.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    rowVenues.forEach { venue ->
-                        VenueCard(
-                            venue = venue,
-                            modifier = Modifier.weight(1f),
-                            onFavoriteToggle = onFavoriteToggle,
-                            isFavorite = isFavorite
-                        )
-                    }
-                    if (rowVenues.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        } else {
-            items(alwaysAvailableVenues, key = { "${it.id}-always" }) { venue ->
-                VenueCard(
-                    venue = venue,
-                    onFavoriteToggle = onFavoriteToggle,
-                    isFavorite = isFavorite
-                )
-            }
-        }
     }
 }
 
