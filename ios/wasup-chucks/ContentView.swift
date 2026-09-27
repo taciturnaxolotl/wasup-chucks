@@ -55,30 +55,6 @@ struct ContentView: View {
         .task {
             await loadMenu()
         }
-        .onChange(of: favoritesStore.favoriteItems) { _ in
-            scheduleNotificationsIfNeeded()
-        }
-        .onChange(of: favoritesStore.favoriteKeywords) { _ in
-            scheduleNotificationsIfNeeded()
-        }
-        .onChange(of: favoritesStore.notificationsEnabled) { _ in
-            scheduleNotificationsIfNeeded()
-        }
-    }
-
-    private func scheduleNotificationsIfNeeded() {
-        guard favoritesStore.notificationsEnabled else {
-            NotificationScheduler.shared.cancelAll()
-            return
-        }
-        if !favoritesStore.favoriteItems.isEmpty || !favoritesStore.favoriteKeywords.isEmpty {
-            NotificationScheduler.shared.requestPermissionIfNeeded()
-        }
-        NotificationScheduler.shared.reschedule(
-            menus: allMenus,
-            favoriteItems: favoritesStore.favoriteItems,
-            favoriteKeywords: favoritesStore.favoriteKeywords
-        )
     }
 
     func loadMenu() async {
@@ -94,7 +70,6 @@ struct ContentView: View {
             dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
             let dateKey = dateFormatter.string(from: Date())
             todayMenu = menu[dateKey] ?? []
-            scheduleNotificationsIfNeeded()
         } catch {
             loadError = error
             print("Failed to load menu: \(error)")
@@ -189,7 +164,6 @@ private struct MoreTab: View {
     @ObservedObject var favoritesStore: FavoritesStore
     @State private var selectedDay: UpcomingDay? = nil
     @State private var newKeyword = ""
-    @State private var testNotifStatus: String? = nil
 
     var upcomingDays: [UpcomingDay] {
         let calendar = CedarvilleTime.calendar
@@ -324,45 +298,6 @@ private struct MoreTab: View {
                             }
                         }
                     }
-                }
-
-                // Notifications
-                Section {
-                    Toggle(isOn: $favoritesStore.notificationsEnabled) {
-                        Label("Favorite Notifications", systemImage: "bell.fill")
-                    }
-                    .tint(.orange)
-
-                    Button {
-                        NotificationScheduler.shared.scheduleTest { result in
-                            testNotifStatus = result
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
-                                testNotifStatus = nil
-                            }
-                        }
-                    } label: {
-                        Label("Send Test Notification", systemImage: "bell.badge")
-                    }
-                    .disabled(testNotifStatus != nil)
-
-                    if let status = testNotifStatus {
-                        switch status {
-                        case "scheduled":
-                            Text("Scheduled — should arrive in ~5s")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        case "denied":
-                            Text("Notifications are disabled. Enable in Settings > Wasup Chuck's > Notifications.")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        default:
-                            Text(status)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-                    }
-                } footer: {
-                    Text("Get notified 1 hour before a meal that has your favorites.")
                 }
 
                 // About
