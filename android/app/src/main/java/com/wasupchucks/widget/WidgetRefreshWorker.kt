@@ -34,8 +34,16 @@ class WidgetRefreshWorker @AssistedInject constructor(
             val cedarvilleZone = ZoneId.of("America/New_York")
             val today = LocalDate.now(cedarvilleZone)
 
+            // When closed, the next meal is often tomorrow's, so follow the phase we
+            // are actually advertising instead of assuming today.
+            val menuDate = if (status.isOpen) {
+                today
+            } else {
+                status.nextPhaseStart?.withZoneSameInstant(cedarvilleZone)?.toLocalDate() ?: today
+            }
+
             if (phase != MealPhase.CLOSED) {
-                menuRepository.getSpecialsWithVenue(today, phase)
+                menuRepository.getSpecialsWithVenue(menuDate, phase)
                     .onSuccess { (items, venueName) ->
                         WidgetState.save(
                             context,
