@@ -60,6 +60,7 @@ import com.wasupchucks.ui.components.menuVenueContent
 import com.wasupchucks.ui.theme.FavoriteColors.favoriteAccent
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -473,10 +474,13 @@ private fun FooterContent(context: Context) {
 
 @Composable
 private fun formatDateLabel(index: Int, dates: List<LocalDate>): String {
-    if (index == 0) return stringResource(R.string.today)
-    if (index == 1) return stringResource(R.string.tomorrow)
     val date = dates.getOrNull(index) ?: return ""
-    return date.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
+    val today = LocalDate.now(ZoneId.of("America/New_York"))
+    return when (date) {
+        today -> stringResource(R.string.today)
+        today.plusDays(1) -> stringResource(R.string.tomorrow)
+        else -> date.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
+    }
 }
 
 @Composable

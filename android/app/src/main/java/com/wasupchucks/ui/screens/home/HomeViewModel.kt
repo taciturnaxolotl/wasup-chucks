@@ -56,7 +56,14 @@ class HomeViewModel @Inject constructor(
     private fun startStatusTimer() {
         viewModelScope.launch {
             while (true) {
-                _uiState.update { it.copy(status = ChucksStatus.calculate()) }
+                // The schedule is re-read too, so the card cannot disagree with the
+                // countdown after live hours land or the clock rolls past midnight.
+                _uiState.update {
+                    it.copy(
+                        status = ChucksStatus.calculate(),
+                        todaySchedule = MealSchedule.scheduleForToday()
+                    )
+                }
                 delay(1000L)
             }
         }
@@ -176,10 +183,12 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun parseSortedDates(menuMap: Map<String, List<VenueMenu>>): List<LocalDate> {
+        val today = LocalDate.now(cedarvilleZone)
         return menuMap.keys
             .mapNotNull { key ->
                 runCatching { LocalDate.parse(key, dateFormatter) }.getOrNull()
             }
+            .filter { !it.isBefore(today) }
             .sorted()
     }
 }
