@@ -25,10 +25,11 @@ the Android side had collected some bugs of its own.
   they match the rest of the app on Android 12 and later
 
 ### Removed
-- Favorite meal notifications. They never actually reached anyone: the app
-  asked for the notification permission in its manifest but never at runtime,
-  so nothing was delivered on modern Android. Favorites continue to work as
-  menu highlighting.
+- Favorite meal notifications, on both iOS and Android. They were unreliable in
+  practice, and on Android they never arrived at all: the app asked for the
+  notification permission in its manifest but never at runtime. Favorites
+  continue to work as menu highlighting, and the app no longer asks permission
+  to send notifications.
 
 **Full Changelog**: https://github.com/taciturnaxolotl/wasup-chucks/compare/v1.2.0...v1.3.0
 
