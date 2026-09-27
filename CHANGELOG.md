@@ -2,6 +2,36 @@
 
 All notable changes to Wasup Chuck's will be documented in this file.
 
+## [1.3.0] - 2026-09-27
+
+Android catch-up release. The iOS app had pulled ahead on a few data fixes, and
+the Android side had collected some bugs of its own.
+
+### Fixed
+- Widgets showed the wrong menu after closing time, listing the meal that had
+  just finished instead of the next one
+- Days in the menu pager were labelled by position, so a menu cached before
+  midnight could show today's food under "Tomorrow"
+- The schedule card could disagree with the countdown beside it, showing the
+  regular hours while the countdown used the real ones
+- Unreadable saved dining hours could crash the app on every launch, with no
+  way out but clearing app data
+- Favorite stars were missing from the two-column tablet layout
+- Requests to the dining hours provider no longer carry campus headers meant
+  for a different service
+
+### Changed
+- Favorites now follow the system color palette instead of a fixed orange, so
+  they match the rest of the app on Android 12 and later
+
+### Removed
+- Favorite meal notifications. They never actually reached anyone: the app
+  asked for the notification permission in its manifest but never at runtime,
+  so nothing was delivered on modern Android. Favorites continue to work as
+  menu highlighting.
+
+**Full Changelog**: https://github.com/taciturnaxolotl/wasup-chucks/compare/v1.2.0...v1.3.0
+
 ## [1.2.0] - 2026-02-06
 
 ### Added
