@@ -68,9 +68,9 @@ data class MealSchedule(
 }
 
 /**
- * Holds the live dining hours in memory. Reads are synchronous because widgets,
- * notifications and the countdown all ask for the schedule far more often than it
- * changes; [com.wasupchucks.data.repository.ScheduleRepository] keeps it filled.
+ * Holds the live dining hours in memory. Reads are synchronous because the widgets
+ * and the countdown ask for the schedule far more often than it changes;
+ * [com.wasupchucks.data.repository.ScheduleRepository] keeps it filled.
  */
 object ScheduleStore {
     @Volatile

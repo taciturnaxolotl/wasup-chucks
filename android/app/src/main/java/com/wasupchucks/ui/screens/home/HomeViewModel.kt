@@ -9,7 +9,6 @@ import com.wasupchucks.data.model.VenueMenu
 import com.wasupchucks.data.repository.FavoritesRepository
 import com.wasupchucks.data.repository.MenuRepository
 import com.wasupchucks.data.repository.ScheduleRepository
-import com.wasupchucks.notifications.NotificationScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,8 +25,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val menuRepository: MenuRepository,
     private val scheduleRepository: ScheduleRepository,
-    private val favoritesRepository: FavoritesRepository,
-    private val notificationScheduler: NotificationScheduler
+    private val favoritesRepository: FavoritesRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -46,26 +44,11 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             favoritesRepository.favoriteItems.collect { items ->
                 _uiState.update { it.copy(favoriteItems = items) }
-                rescheduleNotifications()
             }
         }
         viewModelScope.launch {
             favoritesRepository.favoriteKeywords.collect { keywords ->
                 _uiState.update { it.copy(favoriteKeywords = keywords) }
-                rescheduleNotifications()
-            }
-        }
-    }
-
-    private fun rescheduleNotifications() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            if (state.allMenus.isNotEmpty()) {
-                notificationScheduler.rescheduleNotifications(
-                    menus = state.allMenus,
-                    favoriteItems = state.favoriteItems,
-                    favoriteKeywords = state.favoriteKeywords
-                )
             }
         }
     }
@@ -101,7 +84,6 @@ class HomeViewModel @Inject constructor(
                             error = null
                         )
                     }
-                    rescheduleNotifications()
                 }
                 .onFailure { error ->
                     _uiState.update {
@@ -137,7 +119,6 @@ class HomeViewModel @Inject constructor(
                             error = null
                         )
                     }
-                    rescheduleNotifications()
                 }
                 .onFailure { error ->
                     _uiState.update {
