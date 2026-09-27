@@ -39,12 +39,16 @@ class ScheduleRepository @Inject constructor(
     /** Applies the last stored hours, if any. Safe to call on the main thread. */
     fun loadCached() {
         val json = prefs.getString(SCHEDULE_KEY, null) ?: return
+        // An unrecognised day key must not take the app down: this runs during
+        // Application.onCreate, so a throw here is an unrecoverable launch loop.
         val stored = try {
-            scheduleAdapter.fromJson(json)
+            scheduleAdapter.fromJson(json)?.mapNotNull { (key, value) ->
+                runCatching { DayOfWeek.valueOf(key) }.getOrNull()?.let { it to value }
+            }?.toMap()
         } catch (e: Exception) {
             null
         } ?: return
-        ScheduleStore.apply(stored.mapKeys { DayOfWeek.valueOf(it.key) })
+        if (stored.isNotEmpty()) ScheduleStore.apply(stored)
     }
 
     /**
@@ -53,6 +57,10 @@ class ScheduleRepository @Inject constructor(
      */
     suspend fun refreshIfNeeded(force: Boolean = false) {
         mutex.withLock {
+            // Re-read disk if the store is somehow empty, so a bad load does not
+            // strand us on the baked-in hours until the cache expires.
+            if (ScheduleStore.isEmpty) loadCached()
+
             val fetchedAt = prefs.getLong(FETCHED_AT_KEY, 0L)
             val age = System.currentTimeMillis() - fetchedAt
             if (!force && fetchedAt > 0L && age < CACHE_EXPIRATION) return

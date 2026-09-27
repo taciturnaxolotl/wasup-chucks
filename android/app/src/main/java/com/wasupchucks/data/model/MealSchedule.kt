@@ -80,6 +80,9 @@ object ScheduleStore {
     fun scheduleFor(dayOfWeek: DayOfWeek): List<MealSchedule>? =
         overrides[dayOfWeek]?.takeIf { it.isNotEmpty() }
 
+    val isEmpty: Boolean
+        get() = overrides.isEmpty()
+
     fun apply(schedules: Map<DayOfWeek, List<MealSchedule>>) {
         overrides = schedules
     }
